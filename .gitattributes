@@ -1,0 +1,2 @@
+*.cnf filter=lfs diff=lfs merge=lfs -text
+*.edgelist filter=lfs diff=lfs merge=lfs -text
