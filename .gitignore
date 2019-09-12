@@ -6,3 +6,6 @@ bin/
 build/
 data/
 __pycache__/
+
+*.exe
+*.obj
