@@ -1,6 +1,7 @@
 .git
 .idea
 .vs
+.vscode
 
 bin/
 build/
