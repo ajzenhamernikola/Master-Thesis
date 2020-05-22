@@ -19,7 +19,8 @@ def get_parsed_cnf_directory():
 
 
 def get_all_data_filename():
-    return os.path.join(get_parsed_cnf_directory(), 'all_data.txt')
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(dir_path, '../third_party/dgcnn/data/SAT/SAT.txt')
 
 
 def main():

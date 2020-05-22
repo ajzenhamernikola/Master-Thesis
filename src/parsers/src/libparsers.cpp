@@ -73,14 +73,22 @@ int parse_dimacs_to_dcgnn_vcg(const char base_dir[256], const char file_name[256
             vcg.add_a_neighbour(clause_idx, var_idx);
             // Connect the node with the clause
             vcg.add_a_neighbour(var_idx, clause_idx);
-            // Set the tag for the var node
-            vcg.set_tag_for_node(var_idx, (var_node > 0) ? "1" : "-1");
         }
 
         // Set the tag for the clause node
         vcg.set_tag_for_node(clause_idx, "0");
         // Move on to the next clause
         ++clause_idx;
+    }
+
+    // Set the tags for all var nodes
+    for (auto var_node = 1u; var_node <= num_of_vars; ++var_node)
+    {
+        auto positive_var_idx = static_cast<unsigned>(var_node) - 1u + num_of_clauses;
+        vcg.set_tag_for_node(positive_var_idx, "1");
+
+        auto negative_var_idx = static_cast<unsigned>(var_node) - 1u + num_of_clauses + num_of_vars;
+        vcg.set_tag_for_node(negative_var_idx, "-1");
     }
 
     const auto output_dir = std::string{base_dir} + "/parsed/"s;
