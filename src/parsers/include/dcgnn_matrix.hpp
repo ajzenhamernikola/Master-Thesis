@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <iostream>
 
 #include "node.hpp"
 
@@ -61,7 +62,11 @@ void dcgnn_matrix<T>::dcgnn_matrix::save_to_file(const std::string & base_dir, c
         fs::create_directories(base_dir);
     }
 
-    std::ofstream output{ base_dir + "/"s + file_name };
+    auto output_file = base_dir + "/"s + file_name;
+
+    std::cout << "Saving parsed data to file: " << output_file << std::endl;
+
+    std::ofstream output{ output_file };
     output << _data.size() << " " << _label << std::endl;
     std::for_each(std::cbegin(_data), std::cend(_data), [&](const auto & g_node)
     {

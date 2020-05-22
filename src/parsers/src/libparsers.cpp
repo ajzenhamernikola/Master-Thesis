@@ -41,7 +41,6 @@ int parse_dimacs_to_dcgnn_vcg(const char base_dir[256], const char file_name[256
     {
         if (line.empty() || line[0] == 'c') 
         {
-            assert(!clause_idx);
             continue;
         }
         if (line[0] == 'p')

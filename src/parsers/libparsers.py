@@ -9,8 +9,13 @@ class _parsers_lib():
         self.lib.parse_dimacs_to_dcgnn_vcg.restype = ctypes.c_int
 
 
-    def parse_dimacs_to_dcgnn_vcg(self, base_dir = b'./data', file_name = b'test.cnf', label = 15):
-        self.lib.parse_dimacs_to_dcgnn_vcg(base_dir, file_name, ctypes.c_uint(label))
+    def parse_dimacs_to_dcgnn_vcg(self, base_dir, file_name, label):
+        arg0 = base_dir.encode('utf-8')
+        arg1 = file_name.encode('utf-8')
+        arg2 = ctypes.c_uint(label)
+
+        self.lib.parse_dimacs_to_dcgnn_vcg.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+        self.lib.parse_dimacs_to_dcgnn_vcg(arg0, arg1, arg2)
 
 
 dll_path = '%s/build/dll/libparsers.so' % os.path.dirname(os.path.realpath(__file__))
