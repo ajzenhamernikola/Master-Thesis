@@ -2,18 +2,20 @@ import os
 from datetime import datetime
 from multiprocessing import Pool, Lock
 from sklearn import preprocessing
-import tensorflow as tf
+# import tensorflow as tf
 import numpy as np
-import pandas as pd
+# import pandas as pd
 
-from src.formats.dimacs import Dimacs
-from src.formats.edgelist import Edgelist
-from src.utils.data_conversions import dok_matrix_to_edgelist
+from formats.dimacs import Dimacs
+from formats.edgelist import Edgelist
+from utils.data_conversions import dok_matrix_to_edgelist
 
-import gnn.GNN as GNN
-import gnn.gnn_utils
+# import gnn.GNN as GNN
+# import gnn.gnn_utils
 
-from models import Net
+# from models import Net
+
+from parsers.libparsers import PARSERSLIB
 
 files_to_parse: list = []
 file_to_id: dict = {}
@@ -23,8 +25,8 @@ edge_lists: np.array = np.empty((0, 3), dtype=np.int32)
 lock: Lock = None
 dimacs_file_size_limit: int = -1
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
+# config = tf.ConfigProto()
+# config.gpu_options.allow_growth = True
 
 
 def get_instances_metadata_that_failed_csv_filename():
@@ -278,4 +280,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    PARSERSLIB.parse_dimacs_to_dcgnn_vcg()
