@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from matplotlib import pyplot as plt 
 
+cnf_files = {}
 variables_dist = []
 clauses_dist = []
 this_dirname = os.path.dirname(__file__)
@@ -9,15 +10,17 @@ cnf_dirname = os.path.join(this_dirname, 'cnf')
 
 for _, _, files in os.walk(cnf_dirname):
     for file in files:
-        with open(os.path.join(cnf_dirname, file)) as f:
-            lines = f.readlines()
-            for line in lines:
-                if line.startswith('p cnf'):
-                    tokens = line.strip().split(' ')
-                    variables = int(tokens[2])
-                    clauses = int(tokens[3])
-                    variables_dist.append(variables)
-                    clauses_dist.append(clauses)
+        if file not in cnf_files:
+            with open(os.path.join(cnf_dirname, file)) as f:
+                lines = f.readlines()
+                for line in lines:
+                    if line.startswith('p cnf'):
+                        tokens = line.strip().split(' ')
+                        variables = int(tokens[2])
+                        clauses = int(tokens[3])
+                        variables_dist.append(variables)
+                        clauses_dist.append(clauses)
+            cnf_files[file] = True
 
 variables_dist.sort()
 clauses_dist.sort()
