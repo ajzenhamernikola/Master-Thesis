@@ -359,3 +359,6 @@ TSWLatexianTemp*
 .vscode/
 .vs/
 CppProperties.json
+
+# Global includes
+!data
