@@ -20,14 +20,15 @@ do
     if [[ -d $file ]]; then
         OUTPUT_DIR=$file/features/
         echo "Creating directory $OUTPUT_DIR"
-        # $(mkdir -p $OUTPUT_DIR)
-        # for cnf_file in $file/* 
-        # do 
-        #     FILENAME=$(echo $cnf_file | cut -d'/' -f 4)
-        #     INPUT_FILENAME=$file/$FILENAME
-        #     OUTPUT_FILENAME=$OUTPUT_DIR/${FILENAME%.cnf}.features
-        #     echo "Processing SATzilla features for $INPUT_FILENAME"
-        #     $FEATURES $INPUT_FILENAME $OUTPUT_FILENAME
-        # done 
+        $(mkdir -p $OUTPUT_DIR)
+        for cnf_file in $file/* 
+        do 
+            if [[ -f $cnf_file ]]; then 
+                INPUT_FILENAME=$cnf_file
+                OUTPUT_FILENAME=${cnf_file%.cnf}.features
+                $FEATURES $INPUT_FILENAME $OUTPUT_FILENAME
+                mv $OUTPUT_FILENAME $OUTPUT_DIR
+            fi
+        done 
     fi
 done 
