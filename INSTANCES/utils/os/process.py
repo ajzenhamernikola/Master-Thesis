@@ -24,13 +24,13 @@ cmd_opt.add_argument('-satzilla', type=str2bool, nargs='?', const=True, default=
 cmd_args, _ = cmd_opt.parse_known_args()
 
 
-def start_process(cmdpath, args, print_stdout=True):
+def start_process(cmdpath, args, return_stdout=True):
     if not os.path.exists(cmdpath):
         raise ValueError('The command ' + os.path.abspath(cmdpath) + ' does not exist')
     cmd = [cmdpath]
     for arg in args:
         cmd.append(arg)
     process = subprocess.run(cmd, stdout=subprocess.PIPE)
-    if print_stdout:
-        print(process.stdout)
+    if return_stdout:
+        return process.returncode, process.stdout
     return process.returncode

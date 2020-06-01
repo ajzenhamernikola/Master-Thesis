@@ -17,16 +17,19 @@ from utils.os.process import \
 
 
 def main():
+    bar = '================================================================================'
     print(cmd_args)
     this_directory = os.path.abspath(os.getcwd())
     if cmd_args.wd != '':
         this_directory = os.path.abspath(cmd_args.wd)
 
     if cmd_args.printCategories:
+        print(bar)
         print('Collecting data about instances per category...')
         print_number_of_instances_per_category(this_directory, ['SAT12-INDU.csv', 'SAT12-HAND.csv'])
 
     if cmd_args.plotFilesizes or cmd_args.plotFilteredData:
+        print(bar)
         print('Collecting data about CNF files and sizes...')
         cnf_files, file_sizes = collect_cnf_files_and_sizes(this_directory)
     if cmd_args.plotFilesizes:
@@ -36,6 +39,7 @@ def main():
         plot_filesizes(this_directory, zipped)
     
     if cmd_args.plotFilteredData:
+        print(bar)
         print('Collecting data about CNF files, variables and clauses...')
         zipped, max_vars, max_clauses = calculate_numbers_of_variables_and_clauses(cnf_files)
         zipped = sorted(zipped, key=lambda t: t[1][0])
@@ -49,6 +53,7 @@ def main():
                 str(limit[0]) + '_max_clauses_' + str(limit[1]) + '.csv'))
 
     if cmd_args.satzilla:
+        print(bar)
         print('Generating SATzilla2012 features...')
         generate_satzilla_features('./chosen_data/max_vars_5000_max_clauses_200000.csv')
 

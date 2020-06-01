@@ -1,3 +1,4 @@
+import os 
 import pandas as pd 
 
 from utils.os.path import \
@@ -58,6 +59,11 @@ def print_number_of_instances_per_category(directory, categories):
 
 def generate_satzilla_features(csv_filename):
     data = pd.read_csv(csv_filename)
+    idx = 0
     for filename in data['instance_id']:
+        idx += 1
         features_filename = filename + '.features'
+        if (os.path.exists(features_filename)):
+            continue
+        print('Creating SATzilla2012 features for file #{0}: {1}...'.format(idx, filename))
         start_process('./third-party/SATzilla2012_features/features', [filename, features_filename])
