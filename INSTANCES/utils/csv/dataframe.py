@@ -1,8 +1,12 @@
 import os 
 import pandas as pd 
 
+from utils.cnf.instance import \
+    filter_zipped_data_by_max_vars_and_clauses
 
-def save_cnf_zipped_data_to_csv(data, filename):
+
+def save_cnf_zipped_data_to_csv(data, filename, max_var_limit=None, max_clauses_limit=None):
+    data = filter_zipped_data_by_max_vars_and_clauses(data, max_var_limit, max_clauses_limit)
     if len(data) == 0:
         raise ValueError('No data to save')
 

@@ -4,7 +4,7 @@
 WD="./"
 PRINT_CATEGORIES=false
 PLOT_FILESIZES=false
-PLOT_FILTERED_DATA=false
+PLOT_FILTERED_DATA=true
 SATZILLA=true
 
 # Run code

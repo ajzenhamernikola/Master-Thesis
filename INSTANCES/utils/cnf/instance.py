@@ -67,3 +67,16 @@ def generate_satzilla_features(csv_filename):
             continue
         print('Creating SATzilla2012 features for file #{0}: {1}...'.format(idx, filename))
         start_process('./third-party/SATzilla2012_features/features', [filename, features_filename])
+
+
+def filter_zipped_data_by_max_vars_and_clauses(zipped, max_var_limit=None, max_clauses_limit=None):
+    if (max_var_limit is None) and (max_clauses_limit is not None):
+        raise ValueError('There must be a variable limit if there exists a limit for clauses')
+    if max_var_limit is not None:
+        if max_clauses_limit is not None:
+            filter_fun = lambda t: (t[1][0] < max_var_limit) and (t[1][1] < max_clauses_limit)
+        else:
+            filter_fun = lambda t: t[1][0] < max_var_limit
+        zipped = filter(filter_fun, zipped)
+        zipped = list(zipped)
+    return zipped

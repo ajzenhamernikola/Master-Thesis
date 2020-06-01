@@ -49,8 +49,8 @@ def main():
         limits = [(500, None), (1000, None), (5000, None), (500, 200000), (1000, 200000), (5000, 200000), (50000, 1000000)]
         for limit in limits:
             plot_variables_and_clauses_distrubutions_with_limit(this_directory, deepcopy(zipped), limit[0], limit[1])
-            save_cnf_zipped_data_to_csv(deepcopy(zipped), os.path.join(this_directory, 'chosen_data', 'max_vars_' + \
-                str(limit[0]) + '_max_clauses_' + str(limit[1]) + '.csv'))
+            filename = os.path.join(this_directory, 'chosen_data', 'max_vars_{0}{1}.csv'.format(limit[0], '' if limit[1] is None else '_max_clauses_{0}'.format(limit[1])))
+            save_cnf_zipped_data_to_csv(deepcopy(zipped), filename, limit[0], limit[1])
 
     if cmd_args.satzilla:
         print(bar)
