@@ -5,7 +5,8 @@ from utils.cnf.instance import \
     collect_cnf_files_and_sizes, \
     calculate_numbers_of_variables_and_clauses, \
     print_number_of_instances_per_category, \
-    generate_satzilla_features
+    generate_satzilla_features, \
+    generate_edgelist_formats
 from utils.cnf.plot import \
     plot_filesizes, \
     plot_variables_and_clauses_distrubutions, \
@@ -46,7 +47,8 @@ def main():
         print('Plotting and saving filtered data...')
         plot_variables_and_clauses_distrubutions(this_directory, deepcopy(zipped))
         save_cnf_zipped_data_to_csv(deepcopy(zipped), os.path.join(this_directory, 'chosen_data', 'no_limits.csv'))
-        limits = [(500, None), (1000, None), (5000, None), (500, 200000), (1000, 200000), (5000, 200000), (50000, 1000000)]
+        limits = [(20, None), (500, None), (1000, None), (5000, None), (500, 200000), (1000, 200000), (5000, 200000), \
+            (50000, 1000000)]
         for limit in limits:
             plot_variables_and_clauses_distrubutions_with_limit(this_directory, deepcopy(zipped), limit[0], limit[1])
             filename = os.path.join(this_directory, 'chosen_data', 'max_vars_{0}{1}.csv'.format(limit[0], '' if limit[1] is None else '_max_clauses_{0}'.format(limit[1])))
@@ -56,6 +58,11 @@ def main():
         print(bar)
         print('Generating SATzilla2012 features...')
         generate_satzilla_features('./chosen_data/max_vars_5000_max_clauses_200000.csv')
+
+    if cmd_args.edgelist:
+        print(bar)
+        print('Generating edgelist formats...')
+        generate_edgelist_formats('./chosen_data/max_vars_5000_max_clauses_200000.csv', this_directory)
 
 
 if __name__ == '__main__':

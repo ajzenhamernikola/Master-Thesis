@@ -4,8 +4,9 @@
 WD="./"
 PRINT_CATEGORIES=false
 PLOT_FILESIZES=false
-PLOT_FILTERED_DATA=true
-SATZILLA=true
+PLOT_FILTERED_DATA=false
+SATZILLA=false
+EDGELIST=true
 
 # Run code
 python3 ./main.py \
@@ -13,4 +14,5 @@ python3 ./main.py \
     -printCategories $PRINT_CATEGORIES \
     -plotFilesizes $PLOT_FILESIZES \
     -plotFilteredData $PLOT_FILTERED_DATA \
-    -satzilla $SATZILLA 
+    -satzilla $SATZILLA \
+    -edgelist $EDGELIST

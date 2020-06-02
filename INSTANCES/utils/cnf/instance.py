@@ -7,6 +7,8 @@ from utils.os.process import \
     start_process
 from utils.csv.series import \
     get_column_without_duplicates
+from utils.parsers.libparsers import \
+    PARSERSLIB
 
 
 def collect_instance_names(csv_filename):
@@ -80,3 +82,18 @@ def filter_zipped_data_by_max_vars_and_clauses(zipped, max_var_limit=None, max_c
         zipped = filter(filter_fun, zipped)
         zipped = list(zipped)
     return zipped
+
+
+def generate_edgelist_formats(csv_filename, directory='.'):
+    data = pd.read_csv(csv_filename)
+    idx = 0
+    for filename in data['instance_id']:
+        filename = os.path.join(os.path.abspath(directory), filename)
+        idx += 1
+        features_filename = filename + '.edgelist'
+        if (os.path.exists(features_filename)):
+            continue
+        print('\nCreating Edgelist format for file #{0}: {1}...'.format(idx, filename))
+        basedir = os.path.dirname(filename)
+        filepath = os.path.basename(filename)
+        PARSERSLIB.parse_dimacs_to_edgelist(basedir, filepath)
