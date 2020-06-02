@@ -21,6 +21,7 @@ cmd_opt.add_argument('-plotFilesizes', type=str2bool, nargs='?', const=True, def
 cmd_opt.add_argument('-plotFilteredData', type=str2bool, nargs='?', const=True, default=True, help='Whether to plot filtered CNF files (True) or not (False). Default: True')
 cmd_opt.add_argument('-satzilla', type=str2bool, nargs='?', const=True, default=True, help='Whether to generate SATzilla2012 features (True) or not (False). Default: True')
 cmd_opt.add_argument('-edgelist', type=str2bool, nargs='?', const=True, default=True, help='Whether to generate Edgelist files from CNF files (True) or not (False). Default: True')
+cmd_opt.add_argument('-node2vec', type=str2bool, nargs='?', const=True, default=True, help='Whether to generate node2vec features from Edgelist files (True) or not (False). Default: True')
 
 cmd_args, _ = cmd_opt.parse_known_args()
 

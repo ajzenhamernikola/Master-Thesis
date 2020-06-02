@@ -6,7 +6,8 @@ PRINT_CATEGORIES=false
 PLOT_FILESIZES=false
 PLOT_FILTERED_DATA=false
 SATZILLA=false
-EDGELIST=true
+EDGELIST=false
+NODE2VEC=true
 
 # Run code
 python3 ./main.py \
@@ -15,4 +16,5 @@ python3 ./main.py \
     -plotFilesizes $PLOT_FILESIZES \
     -plotFilteredData $PLOT_FILTERED_DATA \
     -satzilla $SATZILLA \
-    -edgelist $EDGELIST
+    -edgelist $EDGELIST \
+    -node2vec $NODE2VEC

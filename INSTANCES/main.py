@@ -6,7 +6,8 @@ from utils.cnf.instance import \
     calculate_numbers_of_variables_and_clauses, \
     print_number_of_instances_per_category, \
     generate_satzilla_features, \
-    generate_edgelist_formats
+    generate_edgelist_formats, \
+    generate_node2vec_features
 from utils.cnf.plot import \
     plot_filesizes, \
     plot_variables_and_clauses_distrubutions, \
@@ -63,6 +64,11 @@ def main():
         print(bar)
         print('Generating edgelist formats...')
         generate_edgelist_formats('./chosen_data/max_vars_5000_max_clauses_200000.csv', this_directory)
+
+    if cmd_args.node2vec:
+        print(bar)
+        print('Generating node2vec features...')
+        generate_node2vec_features('./chosen_data/max_vars_5000_max_clauses_200000.csv', this_directory)
 
 
 if __name__ == '__main__':
