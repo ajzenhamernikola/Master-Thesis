@@ -2,11 +2,11 @@
 
 # Setup the variables
 WD="./"
-PRINT_CATEGORIES=false
-PLOT_FILESIZES=false
-PLOT_FILTERED_DATA=false
-SATZILLA=false
-EDGELIST=false
+PRINT_CATEGORIES=true
+PLOT_FILESIZES=true
+PLOT_FILTERED_DATA=true
+SATZILLA=true
+EDGELIST=true
 NODE2VEC=true
 
 # Run code

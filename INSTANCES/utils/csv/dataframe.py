@@ -19,4 +19,6 @@ def save_cnf_zipped_data_to_csv(data, filename, max_var_limit=None, max_clauses_
     
     if not os.path.exists(os.path.dirname(filename)):
         os.makedirs(os.path.dirname(filename))
-    pd.DataFrame(df, columns=['instance_id', 'variables', 'clauses']).to_csv(filename, index=False)
+    df = pd.DataFrame(df, columns=['instance_id', 'variables', 'clauses'])
+    print('Saving {} instances to file: {}'.format(len(df), filename))
+    df.to_csv(filename, index=False)

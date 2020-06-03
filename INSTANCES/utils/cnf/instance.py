@@ -18,8 +18,8 @@ def collect_instance_names(csv_filename):
     return col
 
 
-def collect_cnf_files_and_sizes(directory):
-    return collect_files_and_sizes(directory, '.cnf')
+def collect_cnf_files_and_sizes(directory, inst_dict):
+    return collect_files_and_sizes(directory, '.cnf', inst_dict)
 
 
 def calculate_numbers_of_variables_and_clauses(cnf_files):
@@ -54,9 +54,12 @@ def calculate_numbers_of_variables_and_clauses(cnf_files):
 
 
 def print_number_of_instances_per_category(directory, categories):
+    res_dict = {}
     for cat in categories:
         instances = collect_instance_names(cat)
         print(cat, len(instances))
+        res_dict[cat] = instances
+    return res_dict
 
 
 def generate_satzilla_features(csv_filename):
