@@ -2,12 +2,12 @@
 
 # Setup the variables
 WD="./"
-PRINT_CATEGORIES=true
-PLOT_FILESIZES=true
-PLOT_FILTERED_DATA=true
+PRINT_CATEGORIES=false
+PLOT_FILESIZES=false
+PLOT_FILTERED_DATA=false
 SATZILLA=true
-EDGELIST=true
-NODE2VEC=true
+EDGELIST=false
+NODE2VEC=false
 
 # Run code
 python3 ./main.py \

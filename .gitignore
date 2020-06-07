@@ -2,6 +2,7 @@
 .idea
 .vs
 .vscode
+.ipynb_checkpoints
 
 bin/
 build/

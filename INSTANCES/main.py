@@ -59,7 +59,7 @@ def main():
     if cmd_args.satzilla:
         print(bar)
         print('Generating SATzilla2012 features...')
-        generate_satzilla_features('./chosen_data/max_vars_5000_max_clauses_200000.csv')
+        generate_satzilla_features('./chosen_data/no_limits.csv')
 
     if cmd_args.edgelist:
         print(bar)
