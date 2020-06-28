@@ -12,10 +12,10 @@ SAT_Competition2011/SAT03/handmade/bevan/cnf/marg3x3add8.shuffled-as.sat03-1449.
 SAT_Competition2009/CRAFTED/ramseycube/Q32inK10.cnf,45,38430
 SAT_Competition2009/CRAFTED/ramseycube/Q3inK10.cnf,45,75600
 SAT_Competition2011/SAT09/CRAFTED/ramseycube/Q3inK10.cnf,45,75600
-SAT_Competition2011/SAT11/random/medium/unif-k5-r21.3-v50-c1065-S433637520-048.UNKNOWN.cnf,50,1065
-SAT_Competition2011/SAT11/random/medium/unif-k7-r89-v50-c4450-S1880985555-004.UNKNOWN.cnf,50,4450
-SAT_Competition2011/SAT11/random/medium/unif-k7-r89-v50-c4450-S1273410420-036.UNKNOWN.cnf,50,4450
-SAT_Competition2011/SAT11/random/medium/unif-k7-r89-v50-c4450-S1082084494-034.UNKNOWN.cnf,50,4450
-SAT_Competition2011/SAT11/random/medium/unif-k7-r89-v50-c4450-S1788358104-029.SATISFIABLE.cnf,50,4450
-SAT_Competition2011/SAT11/random/medium/unif-k7-r89-v50-c4450-S768928417-025.SATISFIABLE.cnf,50,4450
-SAT_Competition2011/SAT11/random/medium/unif-k5-r21.3-v50-c1065-S827703138-064.UNKNOWN.cnf,50,1065
+SAT_Competition2011/SAT11/crafted/skvortsov/battleship/battleship-6-9-unsat.cnf,54,171
+SAT_Competition2009/CRAFTED/ramseycube/Q3inK11.cnf,55,277200
+SAT_Competition2009/CRAFTED/ramseycube/Q32inK11.cnf,55,139590
+SAT_Competition2007/crafted/spence/medium/s57-100.cnf,57,124
+SAT_Competition2011/SAT02/handmade/pehoushek/plainoldcnf/5cnf_3900_3900_060.shuffled.cnf,60,936
+SAT_Competition2007/crafted/spence/medium/s61-100.cnf,61,132
+SAT_Competition2009/CRAFTED/sgen/unsat/sgen1-unsat-61-100.cnf,61,132
