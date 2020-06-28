@@ -7,10 +7,26 @@ class Edgelist:
         self.data = []
         self.graph_id = graph_id
         self.__num_of_rows = 0
-        self.__is_picked = False
+        self.__is_pickled = False
+        self.max_node = -1
 
-    def add_edge(self, v1, v2):
-        if self.__is_picked:
+    def load_from_file(self, filepath: str):
+        with open(filepath, "r") as file:
+            lines = file.readlines()
+
+        self.data = []
+        for i in range(len(lines)):
+            row_data = lines[i].split(" ")
+            v1 = np.int32(row_data[0])
+            v2 = np.int32(row_data[1])
+            self.add_edge(v1, v2)
+            if self.max_node < v1:
+                self.max_node = v1
+            if self.max_node < v2:
+                self.max_node = v2
+
+    def add_edge(self, v1: np.int32, v2: np.int32):
+        if self.__is_pickled:
             raise ValueError('Cannot add an edge to already pickled object')
 
         self.data.append([v1, v2, self.graph_id])
@@ -22,7 +38,7 @@ class Edgelist:
         data_dump = [self.data, self.graph_id, self.__num_of_rows]
         with open(filename, 'wb') as f:
             pickle.dump(data_dump, f)
-        self.__is_picked = True
+        self.__is_pickled = True
 
     def unpickle(self, filename):
         print('De-serializing data from: ' + filename)

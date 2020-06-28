@@ -1,6 +1,6 @@
 from scipy import sparse
 
-from formats.edgelist import Edgelist
+from src.formats.Edgelist import Edgelist
 
 
 def dok_matrix_to_edgelist(matrix: sparse.dok_matrix, graph_id: int):
