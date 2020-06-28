@@ -1,5 +1,5 @@
-import os 
-import pandas as pd 
+import os
+import pandas as pd
 
 from utils.os.path import \
     collect_files_and_sizes
@@ -94,7 +94,7 @@ def generate_edgelist_formats(csv_filename, directory='.'):
         filename = os.path.join(os.path.abspath(directory), filename)
         idx += 1
         features_filename = filename + '.edgelist'
-        if (os.path.exists(features_filename)):
+        if os.path.exists(features_filename):
             continue
         print('\nCreating Edgelist format for file #{0}: {1}...'.format(idx, filename))
         basedir = os.path.dirname(filename)
@@ -109,10 +109,15 @@ def generate_node2vec_features(csv_filename, directory='.'):
         filename = os.path.join(os.path.abspath(directory), filename)
         idx += 1
         edgelist_filename = filename + '.edgelist'
+        if not os.path.exists(edgelist_filename):
+            raise FileNotFoundError(f"Could not find edgelist file: {edgelist_filename}")
         emb_filename = filename + '.emb'
-        if (os.path.exists(emb_filename)):
+        if os.path.exists(emb_filename):
             continue
         print('\nCreating Node2Vec format for file #{0}: {1}...'.format(idx, edgelist_filename))
-        args = ['-i:{0}'.format(edgelist_filename), '-o:{0}'.format(emb_filename), '-l:3', '-d:2', '-p:0.3', \
-            '-dr', '-v']
+        args = [
+            '-i:{0}'.format(edgelist_filename), '-o:{0}'.format(emb_filename), '-l:3', '-d:2', '-r:5', '-p:0.3', '-dr',
+            '-v'
+        ]
+        print(f"Calling ./third-party/node2vec/node2vec {' '.join(args)}")
         start_process('./third-party/node2vec/node2vec', args)
