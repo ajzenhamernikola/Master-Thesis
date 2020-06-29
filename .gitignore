@@ -8,6 +8,7 @@ bin/
 build/
 binaries/
 data/
+models/
 __pycache__/
 INSTANCES/SAT_Competition2007/
 INSTANCES/SAT_Competition2009/
@@ -366,6 +367,3 @@ TSWLatexianTemp*
 .vscode/
 .vs/
 CppProperties.json
-
-# Global includes
-!data
