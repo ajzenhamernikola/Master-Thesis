@@ -28,20 +28,30 @@ def collate(dev):
 
 
 class Regressor(nn.Module):
-    def __init__(self, in_dim, hidden_dim, n_predicted_vals):
+    def __init__(self, in_dim, hidden_dim, n_predicted_vals, num_layers, activation, dropout_p):
         super(Regressor, self).__init__()
-        self.conv1 = GraphConv(in_dim, hidden_dim)
-        self.conv2 = GraphConv(hidden_dim, hidden_dim)
+        self.layers = nn.ModuleList()
+        # Input layer
+        self.layers.append(GraphConv(in_dim, hidden_dim, activation=activation))
+        # Hidden layers
+        for i in range(num_layers - 1):
+            self.layers.append(GraphConv(hidden_dim, hidden_dim, activation=activation))
+        # Output layer
         self.regress = nn.Linear(hidden_dim, n_predicted_vals)
+        self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, g: dgl.DGLGraph):
-        # Use the node2vec data as initial node features
+        # Use the already set features data as initial node features
         h = g.ndata['features']
-        h = f.relu(self.conv1(g, h))
-        h = f.relu(self.conv2(g, h))
+        # Apply layers
+        for i, layer in enumerate(self.layers):
+            if i != 0:
+                h = self.dropout(h)
+            h = layer(g, h)
         g.ndata['h'] = h
-
+        # Global average pooling over hidden feature data
         hg = dgl.mean_nodes(g, 'h')
+        # Return the predicted data in linear layer over pooled data
         return self.regress(hg)
 
 
@@ -49,21 +59,29 @@ class Regressor(nn.Module):
 def train(device):
     # Load train data
     csv_file_x = os.path.join(os.path.dirname(__file__),
-                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000.csv')
+                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000_top_500.csv')
     csv_file_y = os.path.join(os.path.dirname(__file__),
                               '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
     root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
     trainset = CNFDataset(csv_file_x, csv_file_y, root_dir)
+    print("\nLoaded the CNFDataset!\n")
 
     data_loader = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(device))
+    print("\nCreated the data loader!\n")
 
     # Create model
     num_predicted_values = 31
-    model = Regressor(2, 256, num_predicted_values)
+    model = Regressor(in_dim=2,
+                      hidden_dim=256,
+                      n_predicted_vals=num_predicted_values,
+                      num_layers=2,
+                      activation=f.relu,
+                      dropout_p=0.1)
     model.to(device)
     loss_func = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=3e-3, weight_decay=5e-3)
     model.train()
+    print("\nModel created! Training...\n")
 
     # Start training
     epochs = 100
@@ -81,31 +99,47 @@ def train(device):
         epoch_loss /= (iter_idx + 1)
         print(f'Epoch {epoch}, loss {epoch_loss}')
         epoch_losses.append(epoch_loss)
-    torch.save(model, os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'gcn_model'))
+    torch.save([model, epochs], os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'gcn_model'))
 
 
 # Test the model
 def test():
     # TODO: Load test data
-    test_graph_list, test_label_dict = load_graphs("./test.bin")
-    test_bg = dgl.batch(test_graph_list)
-    test_y = torch.tensor(map(list, test_label_dict))
+    csv_file_x = os.path.join(os.path.dirname(__file__),
+                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000_top_500.csv')
+    csv_file_y = os.path.join(os.path.dirname(__file__),
+                              '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
+    root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
+    trainset = CNFDataset(csv_file_x, csv_file_y, root_dir)
+
+    test_graph_list, y_true = trainset.graphs, np.array(trainset.ys)
 
     # Load the model
-    model = torch.load(os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'gcn_model'))
+    data = torch.load(os.path.join(os.path.dirname(__file__), '..', '..', 'models', 'gcn_model'))
+    model = data[0]
+    epochs = data[1]
     model.eval()
-    r2_scores = []
-    rmse_scores = []
+    y_pred = np.empty((0, 31))
+
+    # Predict
+    print("\nPredicting...\n")
+    with torch.no_grad():
+        for i, (graph, true_y) in enumerate(zip(test_graph_list, y_true)):
+            pred_y = model(graph)
+            pred_y = np.array(pred_y)
+            y_pred = np.vstack((y_pred, pred_y))
 
     # Evaluate
-    for graph, true_y in zip(test_graph_list, test_label_dict):
-        pred_y = model(graph)
-        r2_score = metrics.r2_score(true_y, pred_y)
-        r2_scores.append(r2_score)
-        rmse_score = metrics.mean_squared_error(true_y, pred_y, squared=False)
-        rmse_scores.append(rmse_score)
+    print("\nEvaluating...\n")
+    r2_scores_test = np.empty((31,))
+    rmse_scores_test = np.empty((31,))
+    for i in range(31):
+        r2_scores_test[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
+        rmse_scores_test[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
 
-    print(f'R2: {np.average(r2_scores)}, RMSE: {np.average(rmse_scores)}')
+    r2_score_test_avg = np.average(r2_scores_test)
+    rmse_score_test_avg = np.average(rmse_scores_test)
+    print(f'Average R2 score: {r2_score_test_avg}, Average RMSE score: {rmse_score_test_avg}')
 
 
 if __name__ == "__main__":
@@ -115,4 +149,6 @@ if __name__ == "__main__":
     print(device)
 
     # Start training
-    train(device)
+    # train(device)
+
+    test()

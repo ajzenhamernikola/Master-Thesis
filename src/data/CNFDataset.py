@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import Dataset
 import pandas as pd
 from dgl import DGLGraph
+from dgl.data import save_graphs, load_graphs
 import numpy as np
 
 from src.formats.Edgelist import Edgelist
@@ -25,12 +26,12 @@ class CNFDataset(Dataset):
         if not os.path.exists(csv_x_folder):
             os.makedirs(csv_x_folder)
 
-        # Loading the graphs and ys
+        # Create and pickle graphs if they aren't pickled before and load ys
         n = len(self.csv_data_x)
         for i in range(n):
             # Get the cnf file path
             instance_id: str = self.csv_data_x['instance_id'][i]
-            print(f"Loading the data #{i}/{n} for instance id: {instance_id}...")
+            print(f"Checking the data #{i+1}/{n} for instance id: {instance_id}...")
 
             # Prepare the folder for pickling
             instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
@@ -53,41 +54,55 @@ class CNFDataset(Dataset):
             ys = list(ys.iloc[0])
             self.ys.append(ys)
 
-            if not pickled:
-                # Load the edgelist data and create sparse matrix
-                edgelist_filename = os.path.join(root_dir, instance_id + '.edgelist')
-                if not os.path.exists(edgelist_filename):
-                    raise FileNotFoundError(f"Could not find required edgelist file: {edgelist_filename}")
-                edgelist = Edgelist(i)
-                edgelist.load_from_file(edgelist_filename)
+            if pickled:
+                continue
 
-                graph_adj = SparseMatrix()
-                graph_adj.from_edgelist(edgelist)
-                memory_saved = 100 - (graph_adj.data.nnz / graph_adj.data.shape[0]**2 * 100)
-                print(f"\tSparseMatrix data shape: {graph_adj.data.shape}. Saved {memory_saved:.2f}% of memory")
+            # Load the edgelist data and create sparse matrix
+            edgelist_filename = os.path.join(root_dir, instance_id + '.edgelist')
+            if not os.path.exists(edgelist_filename):
+                raise FileNotFoundError(f"Could not find required edgelist file: {edgelist_filename}")
+            edgelist = Edgelist(i)
+            edgelist.load_from_file(edgelist_filename)
 
-                # Create a graph from sparse matrix
-                g = DGLGraph(graph_adj.data)
-                print(f"\tNumber of nodes: {g.number_of_nodes()}")
+            graph_adj = SparseMatrix()
+            graph_adj.from_edgelist(edgelist)
+            memory_saved = 100 - (graph_adj.data.nnz / graph_adj.data.shape[0]**2 * 100)
+            print(f"\tSparseMatrix data shape: {graph_adj.data.shape}. Saved {memory_saved:.2f}% of memory")
 
-                # Populate initial hidden data
-                # TODO: Node2Vec is too expensive to calculate, find an alternative
-                # node2vec_filename = os.path.join(root_dir, instance_id + '.emb')
-                # if not os.path.exists(node2vec_filename):
-                #     raise FileNotFoundError(f"Could not find required emb file: {node2vec_filename}")
-                # Create a graph
-                # node2vec = Node2Vec()
-                # node2vec.load_from_file(node2vec_filename)
-                # g.ndata['features'] = node2vec.data
-                g.ndata['features'] = np.array(np.random.random((g.number_of_nodes(), 2)), dtype=np.float32)
-                print(f"\tNode 'features' data shape: {g.ndata['features'].shape}")
+            # Create a graph from sparse matrix
+            g = DGLGraph(graph_adj.data)
+            print(f"\tNumber of nodes: {g.number_of_nodes()}")
 
-                # Pickle loaded data for the next load
-                torch.save(g, pickled_filename)
-                print("\tThe graph is pickled for the next load!")
-            else:
-                print("\tFound the pickled data!")
-                g = torch.load(pickled_filename)
+            # Populate initial hidden data
+            # TODO: Node2Vec is too expensive to calculate, find an alternative
+            # node2vec_filename = os.path.join(root_dir, instance_id + '.emb')
+            # if not os.path.exists(node2vec_filename):
+            #     raise FileNotFoundError(f"Could not find required emb file: {node2vec_filename}")
+            # Create a graph
+            # node2vec = Node2Vec()
+            # node2vec.load_from_file(node2vec_filename)
+            # g.ndata['features'] = node2vec.data
+            g.ndata['features'] = np.array(np.random.random((g.number_of_nodes(), 2)), dtype=np.float32)
+            print(f"\tNode 'features' data shape: {g.ndata['features'].shape}")
+
+            # Pickle loaded data for the next load
+            save_graphs(pickled_filename, g)
+            print("\tThe graph is pickled for the next load!")
+
+        # Load the pickled graphs
+        for i in range(n):
+            # Get the cnf file path
+            instance_id: str = self.csv_data_x['instance_id'][i]
+            print(f"Loading the pickled data #{i+1}/{n} for instance id: {instance_id}...")
+
+            # Prepare the folder for pickling
+            instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
+            instance_name = instance_loc[-1]
+            instance_loc = instance_loc[:-1]
+            pickled_filename = os.path.join(csv_x_folder, *instance_loc, instance_name + '.pickled')
+
+            g, _ = load_graphs(pickled_filename)
+            g = g[0]
 
             # Add a graph to the list
             self.graphs.append(g)
