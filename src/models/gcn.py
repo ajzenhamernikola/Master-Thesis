@@ -1,4 +1,5 @@
 import os
+import sys
 import dgl
 from dgl.data.utils import load_graphs
 from dgl.nn.pytorch import GraphConv
@@ -22,7 +23,7 @@ def collate(dev):
             """
         graphs, labels = map(list, zip(*samples))
         batched_graph = dgl.batch(graphs)
-        return batched_graph, torch.tensor(labels, device=dev)
+        return batched_graph, torch.tensor(labels, device=dev, dtype=torch.float32)
     return collate_fn
 
 
@@ -47,23 +48,25 @@ class Regressor(nn.Module):
 # Train the model
 def train(device):
     # Load train data
-    csv_file_x = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_20.csv')
-    csv_file_y = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES', 'chosen_data', 'data_y.csv')
+    csv_file_x = os.path.join(os.path.dirname(__file__),
+                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000.csv')
+    csv_file_y = os.path.join(os.path.dirname(__file__),
+                              '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
     root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
     trainset = CNFDataset(csv_file_x, csv_file_y, root_dir)
 
-    data_loader = DataLoader(trainset, batch_size=5, shuffle=True, collate_fn=collate(device))
+    data_loader = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(device))
 
     # Create model
     num_predicted_values = 31
-    model = Regressor(1, 256, num_predicted_values)
+    model = Regressor(2, 256, num_predicted_values)
     model.to(device)
     loss_func = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     model.train()
 
     # Start training
-    epochs = 10
+    epochs = 100
     epoch_losses = []
     for epoch in range(epochs):
         epoch_loss = 0
@@ -105,9 +108,11 @@ def test():
     print(f'R2: {np.average(r2_scores)}, RMSE: {np.average(rmse_scores)}')
 
 
-# Set the device
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
+if __name__ == "__main__":
+    # Set the device
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    print(device)
 
-# Start training
-train(device)
+    # Start training
+    train(device)

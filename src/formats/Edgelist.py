@@ -29,7 +29,7 @@ class Edgelist:
         if self.__is_pickled:
             raise ValueError('Cannot add an edge to already pickled object')
 
-        self.data.append([v1, v2, self.graph_id])
+        self.data.append([v1, v2])
         self.__num_of_rows += 1
 
     def pickle(self, filename):
