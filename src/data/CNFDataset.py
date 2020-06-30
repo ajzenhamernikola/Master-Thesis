@@ -12,8 +12,13 @@ from src.formats.SparseMatrix import SparseMatrix
 
 
 class CNFDataset(Dataset):
-    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str):
+    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, percent: float = 1.0, return_from_end: bool = False):
         super(CNFDataset).__init__()
+        # Checks
+        if percent <= 0.0 or percent > 1.0:
+            raise ValueError(f"Argument percent must be in range (0.0, 1.0]. You passed: {percent}")
+
+        # Init
         self.graphs = []
         self.ys = []
         self.csv_data_x = pd.read_csv(csv_file_x)
@@ -26,12 +31,17 @@ class CNFDataset(Dataset):
         if not os.path.exists(csv_x_folder):
             os.makedirs(csv_x_folder)
 
-        # Create and pickle graphs if they aren't pickled before and load ys
+        # Load the data
         n = len(self.csv_data_x)
-        for i in range(n):
+        return_max_num = int(percent*n)
+        indices = list(range(return_max_num) if not return_from_end else range(n-1, return_max_num, -1))
+        indices.sort()
+
+        # Create and pickle graphs if they aren't pickled before and load ys
+        for i in indices:
             # Get the cnf file path
             instance_id: str = self.csv_data_x['instance_id'][i]
-            print(f"Checking the data #{i+1}/{n} for instance id: {instance_id}...")
+            print(f"Checking the data #{i+1}/{len(indices)} for instance id: {instance_id}...")
 
             # Prepare the folder for pickling
             instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
@@ -90,10 +100,10 @@ class CNFDataset(Dataset):
             print("\tThe graph is pickled for the next load!")
 
         # Load the pickled graphs
-        for i in range(n):
+        for i in indices:
             # Get the cnf file path
             instance_id: str = self.csv_data_x['instance_id'][i]
-            print(f"Loading the pickled data #{i+1}/{n} for instance id: {instance_id}...")
+            print(f"Loading the pickled data #{i+1}/{len(indices)} for instance id: {instance_id}...")
 
             # Prepare the folder for pickling
             instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
