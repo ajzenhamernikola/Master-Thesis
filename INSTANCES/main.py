@@ -66,11 +66,6 @@ def main():
         print('Generating edgelist formats...')
         generate_edgelist_formats('./chosen_data/max_vars_5000_max_clauses_200000_top_500.csv', this_directory)
 
-    if cmd_args.node2vec:
-        print(bar)
-        print('Generating node2vec features...')
-        generate_node2vec_features('./chosen_data/max_vars_5000_max_clauses_200000_top_500.csv', this_directory)
-
     print(bar)
 
 if __name__ == '__main__':
