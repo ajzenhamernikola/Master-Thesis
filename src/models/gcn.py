@@ -29,12 +29,20 @@ def collate(dev):
 class Regressor(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, activation, dropout_p, pooling="avg"):
         super(Regressor, self).__init__()
+
+        # Checks
+        if num_layers < 2:
+            raise ValueError(f"Argument num_layers must be >= 2. You passed {num_layers}")
+
         self.layers = nn.ModuleList()
         # Input layer
         self.layers.append(GraphConv(input_dim, hidden_dim, activation=activation))
         # Hidden layers
         for i in range(num_layers - 1):
-            self.layers.append(GraphConv(hidden_dim, hidden_dim, activation=activation))
+            if i == num_layers - 2:
+                self.layers.append(GraphConv(hidden_dim, hidden_dim))  # No activation on the last layer
+            else:
+                self.layers.append(GraphConv(hidden_dim, hidden_dim, activation=activation))
 
         # Additional layers
         if pooling == "avg":
@@ -79,16 +87,16 @@ def train(device):
     trainset = CNFDataset(csv_file_x, csv_file_y, root_dir, 0.6)
     print("\nLoaded the CNFDataset!\n")
 
-    data_loader = DataLoader(trainset, batch_size=5, shuffle=True, collate_fn=collate(device))
+    data_loader = DataLoader(trainset, batch_size=25, shuffle=True, collate_fn=collate(device))
     print("\nCreated the data loader!\n")
 
     # Create model
     input_dim = 64
     hidden_dim = 256
     output_dim = 31
-    num_layers = 2
+    num_layers = 3
     activation = f.relu
-    dropout_p = 0.3
+    dropout_p = 0.1
     pooling = "avg"
     model = Regressor(input_dim,
                       hidden_dim,
@@ -121,8 +129,9 @@ def train(device):
             optimizer.step()
             # Report loss
             epoch_loss += loss.detach().item()
+            print("|", end="")
         epoch_loss /= (iter_idx + 1)
-        print(f'Epoch {epoch}, loss {epoch_loss}')
+        print(f'\nEpoch {epoch}, loss {epoch_loss}')
         epoch_losses.append(epoch_loss)
         # Stop if there isn't substantial progress in loss over the last 10 epochs
         if epoch >= 10:

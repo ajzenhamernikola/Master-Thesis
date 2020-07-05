@@ -42,13 +42,31 @@ class CNFDataset(Dataset):
         indices = list(range(return_max_num) if not return_from_end else range(n-1, return_max_num, -1))
         indices.sort()
 
+        # Keep track of unsuccessfully loaded data, so we can skip them faster
+        self.__unsuccessful_txt = os.path.join(os.path.dirname(__file__), "..", "..", "data", "unsuccessful.txt")
+        self.__load_already_known_unsuccessful_graphs()
+
         # Pickle the graphs if they don't exist
         print('\nPickling the data that doesn\'t exist...')
         for i in indices:
-            if not self.check_if_pickled(i):
-                save_indices = self.create_edgelist_from_instance_id(i)
-                if save_indices:
-                    self.indices.append(i)
+            print(f"Checking the pickled state of instance num {i}...")
+            # If the data is pickled, then we have everything we need, so save the index
+            if self.check_if_pickled(i):
+                print(f"\tAlready pickled!")
+                self.indices.append(i)
+                continue
+
+            # If the graph is known to be unsuccessful, skip it
+            if self.__is_unsuccessful_graph(i):
+                print(f"\tIs known to be unsuccessful... Skipping this instance!")
+                continue
+
+            # Finally, try to pickle data and save the index only if we succeed
+            save_indices = self.create_edgelist_from_instance_id(i)
+            if save_indices:
+                self.indices.append(i)
+            else:
+                self.__commit_new_unsuccessful_graph(i)
 
         # Load ys
         for i in self.indices:
@@ -59,6 +77,22 @@ class CNFDataset(Dataset):
             ys = list(ys.iloc[0])
             self.ys.append(ys)
 
+    def __commit_new_unsuccessful_graph(self, i):
+        self.__unsuccessful_indices.append(i)
+        with open(self.__unsuccessful_txt, 'w') as f:
+            f.write(" ".join(map(lambda num: str(num), self.__unsuccessful_indices)))
+
+    def __load_already_known_unsuccessful_graphs(self):
+        if not os.path.exists(self.__unsuccessful_txt):
+            self.__unsuccessful_indices = []
+            return
+
+        with open(self.__unsuccessful_txt, 'r') as f:
+            self.__unsuccessful_indices = list(map(lambda numstr: int(numstr), f.read().split(" ")))
+
+    def __is_unsuccessful_graph(self, i):
+        return i in self.__unsuccessful_indices
+
     def load_pickled_graph(self, i):
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i)
         g, _ = load_graphs(pickled_filename)
@@ -67,7 +101,7 @@ class CNFDataset(Dataset):
 
     def create_edgelist_from_instance_id(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]
-        print(f'Creating the graph data for instance {instance_id}')
+        print(f'\tCreating the graph data for instance {instance_id}')
         # Get the cnf file path
         pickled_filename, pickled_folder = self.extract_pickle_filename_and_folder(i)
 
@@ -124,7 +158,8 @@ class CNFDataset(Dataset):
         return len(self.indices)
 
     def __getitem__(self, item):
-        graph = self.load_pickled_graph(item)
+        i = self.indices[item]
+        graph = self.load_pickled_graph(i)
         return graph, self.ys[item]
 
     def check_if_pickled(self, i):
