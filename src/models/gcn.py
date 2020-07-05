@@ -72,21 +72,21 @@ class Regressor(nn.Module):
 def train(device):
     # Load train data
     csv_file_x = os.path.join(os.path.dirname(__file__),
-                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000_top_500.csv')
+                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000.csv')
     csv_file_y = os.path.join(os.path.dirname(__file__),
                               '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
     root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
-    trainset = CNFDataset(csv_file_x, csv_file_y, root_dir, 0.7)
+    trainset = CNFDataset(csv_file_x, csv_file_y, root_dir, 0.6)
     print("\nLoaded the CNFDataset!\n")
 
-    data_loader = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(device))
+    data_loader = DataLoader(trainset, batch_size=5, shuffle=True, collate_fn=collate(device))
     print("\nCreated the data loader!\n")
 
     # Create model
-    input_dim = 2
-    hidden_dim = 50
+    input_dim = 64
+    hidden_dim = 256
     output_dim = 31
-    num_layers = 5
+    num_layers = 2
     activation = f.relu
     dropout_p = 0.3
     pooling = "avg"
@@ -143,11 +143,11 @@ def train(device):
 def test():
     # TODO: Load test data
     csv_file_x = os.path.join(os.path.dirname(__file__),
-                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000_top_500.csv')
+                              '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000.csv')
     csv_file_y = os.path.join(os.path.dirname(__file__),
                               '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
     root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
-    testset = CNFDataset(csv_file_x, csv_file_y, root_dir, 0.3, True)
+    testset = CNFDataset(csv_file_x, csv_file_y, root_dir, 0.2, True)
 
     test_graph_list, y_true = testset.graphs, np.array(testset.ys)
 
@@ -195,7 +195,7 @@ if __name__ == "__main__":
     device = torch.device("cpu")
     print(device)
 
-    train_not_test = False  # To save memory
+    train_not_test = True  # To save memory
     if train_not_test:
         train(device)
     else:

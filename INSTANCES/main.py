@@ -6,8 +6,7 @@ from utils.cnf.instance import \
     calculate_numbers_of_variables_and_clauses, \
     print_number_of_instances_per_category, \
     generate_satzilla_features, \
-    generate_edgelist_formats, \
-    generate_node2vec_features
+    generate_edgelist_formats
 from utils.cnf.plot import \
     plot_filesizes, \
     plot_variables_and_clauses_distrubutions, \
@@ -59,12 +58,12 @@ def main():
     if cmd_args.satzilla:
         print(bar)
         print('Generating SATzilla2012 features...')
-        generate_satzilla_features('./chosen_data/no_limits.csv')
+        generate_satzilla_features('./chosen_data/max_vars_5000_max_clauses_200000.csv')
 
     if cmd_args.edgelist:
         print(bar)
         print('Generating edgelist formats...')
-        generate_edgelist_formats('./chosen_data/max_vars_5000_max_clauses_200000_top_500.csv', this_directory)
+        generate_edgelist_formats('./chosen_data/max_vars_5000_max_clauses_200000.csv', this_directory)
 
     print(bar)
 

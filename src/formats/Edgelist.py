@@ -16,7 +16,12 @@ class Edgelist:
 
         self.data = []
         for i in range(len(lines)):
-            row_data = lines[i].split(" ")
+            if lines[i].find(" ") != -1:
+                row_data = lines[i].split(" ")
+            elif lines[i].find("\t") != -1:
+                row_data = lines[i].split("\t")
+            else:
+                raise ValueError(fr'Unknown separator for edgelist format. The data found is: {lines[i]}')
             v1 = np.int32(row_data[0])
             v2 = np.int32(row_data[1])
             self.add_edge(v1, v2)

@@ -1,13 +1,15 @@
 import os
-import torch
-from torch.utils.data import Dataset
+
+import numpy as np
 import pandas as pd
+import dgl
 from dgl import DGLGraph
 from dgl.data import save_graphs, load_graphs
-import numpy as np
+from torch.utils.data import Dataset
+from graphvite import graph as vite_graph
+from graphvite import solver as vite_solver
 
 from src.formats.Edgelist import Edgelist
-# from src.formats.Node2Vec import Node2Vec
 from src.formats.SparseMatrix import SparseMatrix
 
 
@@ -19,10 +21,12 @@ class CNFDataset(Dataset):
             raise ValueError(f"Argument percent must be in range (0.0, 1.0]. You passed: {percent}")
 
         # Init
-        self.graphs = []
+        self.root_dir = root_dir
         self.ys = []
         self.csv_data_x = pd.read_csv(csv_file_x)
         self.csv_data_y = pd.read_csv(csv_file_y)
+        self.embed = vite_solver.GraphSolver(dim=64)
+        self.indices = []
 
         # Create the folder for pickling data
         csv_x = csv_file_x[csv_file_x.rfind(os.sep, 0, -1)+1:-4]
@@ -30,6 +34,7 @@ class CNFDataset(Dataset):
         csv_x_folder = os.path.join(os.path.dirname(__file__), "..", "..", "data", csv_x)
         if not os.path.exists(csv_x_folder):
             os.makedirs(csv_x_folder)
+        self.csv_x_folder = csv_x_folder
 
         # Load the data
         n = len(self.csv_data_x)
@@ -37,88 +42,101 @@ class CNFDataset(Dataset):
         indices = list(range(return_max_num) if not return_from_end else range(n-1, return_max_num, -1))
         indices.sort()
 
-        # Create and pickle graphs if they aren't pickled before and load ys
+        # Pickle the graphs if they don't exist
+        print('\nPickling the data that doesn\'t exist...')
         for i in indices:
+            if not self.check_if_pickled(i):
+                save_indices = self.create_edgelist_from_instance_id(i)
+                if save_indices:
+                    self.indices.append(i)
+
+        # Load ys
+        for i in self.indices:
             # Get the cnf file path
             instance_id: str = self.csv_data_x['instance_id'][i]
-            print(f"Checking the data #{i+1}/{len(indices)} for instance id: {instance_id}...")
-
-            # Prepare the folder for pickling
-            instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
-            instance_name = instance_loc[-1]
-            instance_loc = instance_loc[:-1]
-            pickled_filename = os.path.join(csv_x_folder, *instance_loc, instance_name + '.pickled')
-            pickled_folder = os.path.dirname(pickled_filename)
-
-            if not os.path.exists(pickled_folder):
-                os.makedirs(pickled_folder)
-
-            pickled = False
-            if os.path.exists(pickled_filename):
-                pickled = True
-
-            # We first get the true solver runtime data,
-            # because we don't pickle that
             ys = self.csv_data_y[self.csv_data_y['instance_id'] == instance_id]
             ys = ys.drop(columns=['instance_id'])
             ys = list(ys.iloc[0])
             self.ys.append(ys)
 
-            if pickled:
-                continue
+    def load_pickled_graph(self, i):
+        pickled_filename, _ = self.extract_pickle_filename_and_folder(i)
+        g, _ = load_graphs(pickled_filename)
+        g = g[0]
+        return g
 
-            # Load the edgelist data and create sparse matrix
-            edgelist_filename = os.path.join(root_dir, instance_id + '.edgelist')
-            if not os.path.exists(edgelist_filename):
-                raise FileNotFoundError(f"Could not find required edgelist file: {edgelist_filename}")
-            edgelist = Edgelist(i)
-            edgelist.load_from_file(edgelist_filename)
+    def create_edgelist_from_instance_id(self, i):
+        instance_id: str = self.csv_data_x['instance_id'][i]
+        print(f'Creating the graph data for instance {instance_id}')
+        # Get the cnf file path
+        pickled_filename, pickled_folder = self.extract_pickle_filename_and_folder(i)
 
-            graph_adj = SparseMatrix()
-            graph_adj.from_edgelist(edgelist)
-            memory_saved = 100 - (graph_adj.data.nnz / graph_adj.data.shape[0]**2 * 100)
-            print(f"\tSparseMatrix data shape: {graph_adj.data.shape}. Saved {memory_saved:.2f}% of memory")
+        if not os.path.exists(pickled_folder):
+            os.makedirs(pickled_folder)
 
-            # Create a graph from sparse matrix
-            g = DGLGraph(graph_adj.data)
-            print(f"\tNumber of nodes: {g.number_of_nodes()}")
+        # Load the edgelist data and create sparse matrix
+        edgelist_filename = os.path.join(self.root_dir, instance_id + '.edgelist')
+        if not os.path.exists(edgelist_filename):
+            raise FileNotFoundError(f"Could not find required edgelist file: {edgelist_filename}")
 
-            # Populate initial hidden data
-            # TODO: Node2Vec is too expensive to calculate, find an alternative
-            # node2vec_filename = os.path.join(root_dir, instance_id + '.emb')
-            # if not os.path.exists(node2vec_filename):
-            #     raise FileNotFoundError(f"Could not find required emb file: {node2vec_filename}")
-            # Create a graph
-            # node2vec = Node2Vec()
-            # node2vec.load_from_file(node2vec_filename)
-            # g.ndata['features'] = node2vec.data
-            g.ndata['features'] = np.array(np.random.random((g.number_of_nodes(), 2)), dtype=np.float32)
-            print(f"\tNode 'features' data shape: {g.ndata['features'].shape}")
+        # Prepare graph for DeepWalk
+        print(f"\tPreparing graph for DeepWalk...")
+        v_graph = vite_graph.Graph()
+        v_graph.load(edgelist_filename, as_undirected=False)
+        v_graph_node_num = len(v_graph.id2name)
 
-            # Pickle loaded data for the next load
-            save_graphs(pickled_filename, g)
-            print("\tThe graph is pickled for the next load!")
+        # Prepare graph for DGL
+        print(f"\tPreparing graph for DGL...")
+        edgelist = Edgelist(i)
+        edgelist.load_from_file(edgelist_filename)
+        graph_adj = SparseMatrix()
+        graph_adj.from_edgelist(edgelist)
+        g = DGLGraph(graph_adj.data)
+        g_node_num = g.number_of_nodes()
 
-        # Load the pickled graphs
-        for i in indices:
-            # Get the cnf file path
-            instance_id: str = self.csv_data_x['instance_id'][i]
-            print(f"Loading the pickled data #{i+1}/{len(indices)} for instance id: {instance_id}...")
+        # Check if graphs have the same number of nodes
+        if v_graph_node_num == g_node_num:
+            print(f"\tNumber of nodes: {g_node_num}")
+        else:
+            print(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
+            return False
 
-            # Prepare the folder for pickling
-            instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
-            instance_name = instance_loc[-1]
-            instance_loc = instance_loc[:-1]
-            pickled_filename = os.path.join(csv_x_folder, *instance_loc, instance_name + '.pickled')
+        # Train DeepWalk hidden data
+        self.embed.build(v_graph)
+        self.embed.train(model='DeepWalk', num_epoch=2000, resume=False, augmentation_step=1, random_walk_length=40,
+                         random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
+                         negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
 
-            g, _ = load_graphs(pickled_filename)
-            g = g[0]
+        # Add hidden feature data
+        g.ndata['features'] = np.array(self.embed.vertex_embeddings, dtype=np.float32)
+        print(f"\tNode 'features' data shape: {g.ndata['features'].shape}")
 
-            # Add a graph to the list
-            self.graphs.append(g)
+        # Clear memory and data on CPU and GPU
+        self.embed.clear()
+
+        # Pickle loaded data for the next load
+        save_graphs(pickled_filename, g)
+        print("\tThe graph is pickled for the next load!")
+
+        return True
 
     def __len__(self):
-        return len(self.graphs)
+        return len(self.indices)
 
     def __getitem__(self, item):
-        return self.graphs[item], self.ys[item]
+        graph = self.load_pickled_graph(item)
+        return graph, self.ys[item]
+
+    def check_if_pickled(self, i):
+        pickled_filename, _ = self.extract_pickle_filename_and_folder(i)
+        return os.path.exists(pickled_filename)
+
+    def extract_pickle_filename_and_folder(self, i):
+        instance_id: str = self.csv_data_x['instance_id'][i]
+        instance_loc = instance_id.split("/" if instance_id.find("/") != -1 else "\\")
+        instance_name = instance_loc[-1]
+        instance_loc = instance_loc[:-1]
+        pickled_filename = os.path.join(self.csv_x_folder, *instance_loc, instance_name + '.pickled')
+        pickled_folder = os.path.dirname(pickled_filename)
+
+        return pickled_filename, pickled_folder
