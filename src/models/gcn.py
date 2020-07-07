@@ -92,6 +92,34 @@ class Regressor(nn.Module):
         return linear
 
 
+def train_one_epoch(data_loader_train, loss_func, model, optimizer, train_device):
+    model.train()
+    train_loss = 0
+    iter_idx = 0
+    for iter_idx, (bg, label) in enumerate(data_loader_train):
+        # Predict
+        prediction = model(bg.to(train_device))
+        loss = loss_func(prediction, label.to(train_device))
+        # Backprop
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        # Report loss
+        train_loss += loss.detach().item()
+    return train_loss / (iter_idx+1)
+
+
+def validate_one_epoch(model, loss_func, data_loader_val, train_device):
+    model.eval()
+    val_loss = 0
+    iter_num = 0
+    for iter_num, (bg, label) in enumerate(data_loader_val):
+        prediction = model(bg.to(train_device))
+        loss = loss_func(prediction, label.to(train_device))
+        val_loss += loss.detach().item()
+    return val_loss / (iter_num + 1)
+
+
 # Train the model
 def train(train_device):
     # Load train data
@@ -102,10 +130,14 @@ def train(train_device):
     valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val")
     data_loader_val = DataLoader(valset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
+    # Load train+val data
+    trainvalset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train+val")
+    data_loader_trainval = DataLoader(trainvalset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
+
     # Model params
     dataset = trainset.dataset_type
     input_dim = trainset.data_dim
-    hidden_dim = 64
+    hidden_dim = 31
     output_dim = 31
     num_layers = 2
     activation = "elu"
@@ -142,46 +174,51 @@ def train(train_device):
     # Start training
     train_losses = []
     val_losses = []
-    train_times = []
     val_times = []
-    for epoch in range(epochs):
-        model.train()
-        train_loss = 0
-        iter_idx = -1
-
-        time_start = time.process_time_ns()
-        for iter_idx, (bg, label) in enumerate(data_loader_train):
-            # Predict
-            prediction = model(bg.to(train_device))
-            loss = loss_func(prediction, label.to(train_device))
-            # Backprop
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            # Report loss
-            train_loss += loss.detach().item()
-        time_elapsed = time.process_time_ns() - time_start
-        train_times.append(time_elapsed)
-
-        train_loss /= (iter_idx + 1)
+    best_epoch = -1
+    best_val_loss = None
+    no_progress_count = 0
+    for current_epoch in range(epochs):
+        # Train on training data
+        train_loss = train_one_epoch(data_loader_train, loss_func, model, optimizer, train_device)
         train_losses.append(train_loss)
 
-        model.eval()
-        val_loss = 0
-
+        # Validate on validating data
         time_start = time.process_time_ns()
-        for iter_idx, (bg, label) in enumerate(data_loader_val):
-            # Predict
-            prediction = model(bg.to(train_device))
-            loss = loss_func(prediction, label.to(train_device))
-            val_loss += loss.detach().item()
+        val_loss = validate_one_epoch(model, loss_func, data_loader_val, train_device)
         time_elapsed = time.process_time_ns() - time_start
         val_times.append(time_elapsed)
-
-        val_loss /= (iter_idx + 1)
         val_losses.append(val_loss)
 
-        print(f'\nEpoch {epoch}, train loss {train_loss}, val loss {val_loss}')
+        # Early stopping
+        if current_epoch == 0:
+            best_val_loss = val_loss
+            best_epoch = 0
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = current_epoch
+            no_progress_count = 0
+        else:
+            no_progress_count += 1
+
+        if no_progress_count == 15:
+            print(f'\nThe training is stopped in epoch {current_epoch+1} due to no progress in validation loss:')
+            print(f'\tLast train loss {train_loss}, last val loss {val_loss}')
+            print(f'\tBest val loss {best_val_loss}, best epoch {best_epoch}')
+            break
+
+        print(f'\nEpoch {current_epoch+1}, train loss {train_loss}, val loss {val_loss}')
+
+    # Retraining model on train+val dataset
+    print("\nRetraining model on train+val dataset...")
+    train_times = []
+    for current_epoch in range(best_epoch):
+        time_start = time.process_time_ns()
+        train_one_epoch(data_loader_trainval, loss_func, model, optimizer, train_device)
+        time_elapsed = time.process_time_ns() - time_start
+        train_times.append(time_elapsed)
+        print(f"\tFinished epoch {current_epoch+1} of {best_epoch}")
 
     # Serialize model for later usage
     torch.save([model, train_losses, val_losses, train_times, val_times], model_path)
@@ -199,8 +236,13 @@ def test(predict_device, test_device, model_path):
     model.to(predict_device)
     train_losses = data[1]
     val_losses = data[2]
+    best_val_loss = np.argmin(val_losses)
+    highest_val_loss = np.maximum(np.max(val_losses), np.max(train_losses))
+    lowest_train_loss = np.min(train_losses)
+    plt.xticks(range(len(train_losses)), range(1, len(train_losses)+1))
     plt.plot(range(len(train_losses)), train_losses, 'b-')
     plt.plot(range(len(val_losses)), val_losses, 'r-')
+    plt.plot([best_val_loss, best_val_loss], [lowest_train_loss, highest_val_loss], 'g-')
     plt.show()
 
     # Prepare for predicting

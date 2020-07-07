@@ -51,6 +51,7 @@ class CNFDatasetNode2Vec(Dataset):
         self.__unsuccessful_txt = os.path.join(os.path.dirname(__file__), "..", "..", self.data_dir,
                                                f"{self.dataset_type}_unsuccessful.txt")
         self.__load_already_known_unsuccessful_graphs()
+        print(f"\nPreparing the dataset for phase: {data_type}")
 
         # Create the folder for pickling data
         csv_x = csv_file_x[csv_file_x.rfind(os.sep, 0, -1) + 1:-4]
