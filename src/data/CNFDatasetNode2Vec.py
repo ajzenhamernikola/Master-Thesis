@@ -169,6 +169,11 @@ class CNFDatasetNode2Vec(Dataset):
             print(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
             return False
 
+        self.train_features(v_graph, i)
+
+        return True
+
+    def train_features(self, v_graph, i):
         # Train Node2Vec hidden data
         embed = vite_solver.GraphSolver(dim=self.data_dim)
         embed.build(v_graph)
@@ -185,8 +190,6 @@ class CNFDatasetNode2Vec(Dataset):
         # Pickle hidden feature data
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i, features=True)
         np.save(pickled_filename, features)
-
-        return True
 
     def create_edgelist_from_instance_id(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]
@@ -240,7 +243,14 @@ class CNFDatasetNode2Vec(Dataset):
 
         # Unpickle graph and feature data
         graph = self.load_pickled_graph(i)
-        graph.ndata['features'] = self.load_pickled_features(i)
+        features = self.load_pickled_features(i)
+
+        # Check if we need to re-pickle feature data (if nan had occurred during previous pickling)
+        while np.any(np.isnan(features)):
+            self.create_node2vec_features(i)
+            features = self.load_pickled_features(i)
+
+        graph.ndata['features'] = features
 
         ys = self.ys[item]
 

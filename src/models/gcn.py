@@ -95,11 +95,11 @@ class Regressor(nn.Module):
 # Train the model
 def train(train_device):
     # Load train data
-    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train", train=0.6)
+    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train")
     data_loader_train = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
     # Load val data
-    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val", val=0.2)
+    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val")
     data_loader_val = DataLoader(valset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
     # Model params
