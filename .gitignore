@@ -367,3 +367,6 @@ TSWLatexianTemp*
 .vscode/
 .vs/
 CppProperties.json
+
+# Global excludes
+!src/data
