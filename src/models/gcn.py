@@ -95,11 +95,11 @@ class Regressor(nn.Module):
 # Train the model
 def train(train_device):
     # Load train data
-    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train")
+    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train", train=0.6)
     data_loader_train = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
     # Load val data
-    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val")
+    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val", val=0.2)
     data_loader_val = DataLoader(valset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
     # Model params
@@ -247,12 +247,3 @@ def test(predict_device, test_device, model_path):
     val_times = data[4]
     print(f"Average training time: {np.average(train_times) / 1000*1000*1000}s")
     print(f"Average validating time: {np.average(val_times) / 1000*1000*1000}s")
-
-
-if __name__ == "__main__":
-    # Set the device
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    test_device = torch.device("cpu")
-
-    model_path = train(device)
-    test(device, test_device, model_path)

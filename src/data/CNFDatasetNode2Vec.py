@@ -44,7 +44,6 @@ class CNFDatasetNode2Vec(Dataset):
         self.csv_data_x = pd.read_csv(csv_file_x)
         self.csv_data_y = pd.read_csv(csv_file_y)
         self.data_dim = 32
-        self.embed = vite_solver.GraphSolver(dim=self.data_dim)
         self.indices = []
         self.data_dir = "data"
         self.dataset_type = "node2vec"
@@ -54,8 +53,8 @@ class CNFDatasetNode2Vec(Dataset):
         self.__load_already_known_unsuccessful_graphs()
 
         # Create the folder for pickling data
-        csv_x = csv_file_x[csv_file_x.rfind(os.sep, 0, -1)+1:-4]
-        assert(csv_x != "" and csv_x.find(os.sep) == -1)
+        csv_x = csv_file_x[csv_file_x.rfind(os.sep, 0, -1) + 1:-4]
+        assert (csv_x != "" and csv_x.find(os.sep) == -1)
         csv_x_folder = os.path.join(os.path.dirname(__file__), "..", "..", self.data_dir, csv_x)
         if not os.path.exists(csv_x_folder):
             os.makedirs(csv_x_folder)
@@ -68,13 +67,13 @@ class CNFDatasetNode2Vec(Dataset):
         random.shuffle(indices)
         if data_type == "train":
             low = 0
-            high = int(math.floor(train*n))
+            high = int(math.floor(train * n))
         elif data_type == "val":
-            low = int(math.floor(train*n))
-            high = int(math.floor((train+val)*n))
+            low = int(math.floor(train * n))
+            high = int(math.floor((train + val) * n))
         elif data_type == "train+val":
             low = 0
-            high = int(math.floor((train+val)*n))
+            high = int(math.floor((train + val) * n))
         else:
             low = int(math.floor((train + val) * n))
             high = n
@@ -171,18 +170,22 @@ class CNFDatasetNode2Vec(Dataset):
             return False
 
         # Train Node2Vec hidden data
-        self.embed.build(v_graph)
-        self.embed.train(model='node2vec', num_epoch=2000, resume=False, augmentation_step=1, random_walk_length=40,
-                         random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
-                         negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
+        embed = vite_solver.GraphSolver(dim=self.data_dim)
+        embed.build(v_graph)
+        embed.train(model='node2vec', num_epoch=2000, resume=False, augmentation_step=1, random_walk_length=40,
+                    random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
+                    negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
+
+        # Extract embedded feature data
+        features = np.array(np.copy(embed.vertex_embeddings), dtype=np.float32)
+
+        # Clear memory and data on CPU and GPU
+        embed.clear()
 
         # Pickle hidden feature data
-        features = np.array(self.embed.vertex_embeddings, dtype=np.float32)
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i, features=True)
         np.save(pickled_filename, features)
 
-        # Clear memory and data on CPU and GPU
-        self.embed.clear()
         return True
 
     def create_edgelist_from_instance_id(self, i):
@@ -208,7 +211,7 @@ class CNFDatasetNode2Vec(Dataset):
         g = DGLGraph(graph_adj.data)
 
         # Pickle loaded data for the next load
-        save_graphs(pickled_filename, g)
+        save_graphs(pickled_filename, [g])
 
     def check_if_pickled(self, i):
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i)
