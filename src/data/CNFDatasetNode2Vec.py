@@ -21,8 +21,8 @@ def log10_transform_data(data):
 
 
 class CNFDatasetNode2Vec(Dataset):
-    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.75,
-                 val: float = 0.1, test: float = 0.15):
+    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.8,
+                 val: float = 0.1, test: float = 0.1):
         super(CNFDatasetNode2Vec).__init__()
         # Checks
         percents = [train, val, test]
@@ -114,13 +114,20 @@ class CNFDatasetNode2Vec(Dataset):
                 self.__commit_new_unsuccessful_graph(i)
 
         # Load ys
+        final_indices = []
         for i in self.indices:
             # Get the cnf file path
             instance_id: str = self.csv_data_x['instance_id'][i]
             ys = self.csv_data_y[self.csv_data_y['instance_id'] == instance_id]
             ys = np.array(ys.drop(columns=['instance_id']).iloc[0], dtype=np.float32)
+            non_solvable = np.all(ys == 1200.0)
+            if non_solvable:
+                continue
             ys = log10_transform_data(ys)
             self.ys.append(ys)
+            final_indices.append(i)
+
+        self.indices = final_indices
 
     def __commit_new_unsuccessful_graph(self, i):
         self.__unsuccessful_indices.append(i)
