@@ -64,7 +64,7 @@ class CNFDatasetNode2Vec(Dataset):
         # Load the data
         n = len(self.csv_data_x)
         indices = list(range(n))
-        random.seed(42)
+        random.seed(0)
         random.shuffle(indices)
         if data_type == "train":
             low = 0

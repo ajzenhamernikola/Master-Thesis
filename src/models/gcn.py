@@ -1,5 +1,5 @@
 import os
-import time
+from timeit import default_timer as timer
 
 import dgl
 import numpy as np
@@ -50,6 +50,8 @@ class Regressor(nn.Module):
             self.activation = nn.LeakyReLU(**activation_params)
         elif activation == "elu":
             self.activation = nn.ELU(**activation_params)
+        elif activation == "selu":
+            self.activation = nn.SELU(**activation_params)
         else:
             raise NotImplementedError(f"Unknown activation method: {pooling}")
 
@@ -106,22 +108,44 @@ def train_one_epoch(data_loader_train, loss_func, model, optimizer, train_device
         optimizer.step()
         # Report loss
         train_loss += loss.detach().item()
-    return train_loss / (iter_idx+1)
+    return np.round(train_loss / (iter_idx + 1), 3)
 
 
-def validate_one_epoch(model, loss_func, data_loader_val, train_device):
+def validate_one_epoch(model, loss_func, data_loader_val, train_device, test_device):
     model.eval()
     val_loss = 0
     iter_num = 0
+    y_pred = np.empty((0, 31))
+    y_true = np.empty((0, 31))
     for iter_num, (bg, label) in enumerate(data_loader_val):
         prediction = model(bg.to(train_device))
+        # Calculate loss
         loss = loss_func(prediction, label.to(train_device))
         val_loss += loss.detach().item()
-    return val_loss / (iter_num + 1)
+        # Save prediction for calculating R^2 and RMSE scores
+        pred_y = model(bg.to(train_device))
+        pred_y = np.array(pred_y.to(test_device).detach().numpy())
+        y_pred = np.vstack((y_pred, pred_y))
+        y_true = np.vstack((y_true, label.to(test_device)))
+
+    r2_score_val_avg, rmse_score_val_avg = calculate_r2_and_rmse_scores(y_pred, y_true)
+
+    return np.round([val_loss / (iter_num + 1), r2_score_val_avg, rmse_score_val_avg], 3)
+
+
+def calculate_r2_and_rmse_scores(y_pred, y_true):
+    r2_scores_val = np.empty((31,))
+    rmse_scores_val = np.empty((31,))
+    for i in range(31):
+        r2_scores_val[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
+        rmse_scores_val[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
+    r2_score_val_avg = np.average(r2_scores_val)
+    rmse_score_val_avg = np.average(rmse_scores_val)
+    return r2_score_val_avg, rmse_score_val_avg
 
 
 # Train the model
-def train(train_device):
+def train(train_device, test_device):
     # Load train data
     trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train")
     data_loader_train = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
@@ -134,24 +158,45 @@ def train(train_device):
     trainvalset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train+val")
     data_loader_trainval = DataLoader(trainvalset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
 
+    print("\n")
+
     # Model params
-    dataset = trainset.dataset_type
     input_dim = trainset.data_dim
-    hidden_dim = 31
+    hidden_dim = 20
     output_dim = 31
     num_layers = 2
     activation = "elu"
-    activation_params = {"alpha": 0.3}
+    activation_params = {"alpha": 0.2}
     dropout_p = 0.2
     pooling = "avg"
     # Optimizer params
-    learning_rate = 1e-4
+    learning_rate = 7e-5
     weight_decay = 0.0
     # Num of epochs
-    epochs = 200
+    epochs = 100
+
+    print_bar()
+    print("Model parameters")
+    print_bar()
+    print(f"Features dimension: {input_dim}")
+    print(f"Dimension of hidden layers: {hidden_dim}")
+    print(f"Output dimension: {output_dim}")
+    print(f"Number of hidden layers: {num_layers}")
+    print(f"Activation function: {activation}")
+    print(f"Activation function params: {activation_params}")
+    print(f"Dropout: {dropout_p}")
+    print(f"Pooling method: {pooling}")
+    print_bar()
+    print("Optimizer params (ADAM)")
+    print_bar()
+    print(f"Learning rate: {learning_rate}")
+    print(f"Weight decay: {weight_decay}")
+    print_bar()
+    print(f"Maximum number of epochs: {epochs}")
+    print_bar()
 
     # Model name
-    mfn = f'gcn_model_{hidden_dim}_{num_layers}_{dropout_p}_{pooling}_{learning_rate}_{weight_decay}_{epochs}_{dataset}'
+    mfn = f'gcn_{hidden_dim}_{num_layers}_{dropout_p}_{pooling}_{activation}_{learning_rate}_{weight_decay}_{epochs}'
     model_path = os.path.join(os.path.dirname(__file__), '..', '..', 'models', mfn)
     if os.path.exists(model_path):
         print("\nModel had already been trained!")
@@ -174,26 +219,35 @@ def train(train_device):
     # Start training
     train_losses = []
     val_losses = []
+    r2_scores = []
+    rmse_scores = []
+    train_times = []
     val_times = []
     best_epoch = -1
     best_val_loss = None
     no_progress_count = 0
-    for current_epoch in range(epochs):
+    for current_epoch in range(1, epochs + 1):
         # Train on training data
+        time_start = timer()
         train_loss = train_one_epoch(data_loader_train, loss_func, model, optimizer, train_device)
+        time_elapsed = timer() - time_start
+        train_times.append(time_elapsed)
         train_losses.append(train_loss)
 
         # Validate on validating data
-        time_start = time.process_time_ns()
-        val_loss = validate_one_epoch(model, loss_func, data_loader_val, train_device)
-        time_elapsed = time.process_time_ns() - time_start
+        time_start = timer()
+        val_loss, r2_score_val_avg, rmse_score_val_avg = validate_one_epoch(model, loss_func, data_loader_val,
+                                                                            train_device, test_device)
+        time_elapsed = timer() - time_start
         val_times.append(time_elapsed)
         val_losses.append(val_loss)
+        r2_scores.append(r2_score_val_avg)
+        rmse_scores.append(rmse_score_val_avg)
 
         # Early stopping
-        if current_epoch == 0:
+        if current_epoch == 1:
             best_val_loss = val_loss
-            best_epoch = 0
+            best_epoch = 1
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -202,26 +256,30 @@ def train(train_device):
         else:
             no_progress_count += 1
 
-        if no_progress_count == 15:
-            print(f'\nThe training is stopped in epoch {current_epoch+1} due to no progress in validation loss:')
-            print(f'\tLast train loss {train_loss}, last val loss {val_loss}')
-            print(f'\tBest val loss {best_val_loss}, best epoch {best_epoch}')
+        if no_progress_count == 0.05 * epochs:
+            print(f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
+            print(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
             break
 
-        print(f'\nEpoch {current_epoch+1}, train loss {train_loss}, val loss {val_loss}')
+        print(f'\nEpoch {current_epoch} summary:')
+        print(f'\tTrain loss: {train_loss}')
+        print(f'\tValidation loss: {val_loss}')
+        print(f'\tValidation R^2 score: {r2_score_val_avg}')
+        print(f'\tValidation RMSE score: {rmse_score_val_avg}')
 
     # Retraining model on train+val dataset
     print("\nRetraining model on train+val dataset...")
-    train_times = []
-    for current_epoch in range(best_epoch):
-        time_start = time.process_time_ns()
+    retrain_times = []
+    for current_epoch in range(1, best_epoch + 2):
+        time_start = timer()
         train_one_epoch(data_loader_trainval, loss_func, model, optimizer, train_device)
-        time_elapsed = time.process_time_ns() - time_start
-        train_times.append(time_elapsed)
-        print(f"\tFinished epoch {current_epoch+1} of {best_epoch}")
+        time_elapsed = timer() - time_start
+        retrain_times.append(time_elapsed)
+        print(f"\tFinished epoch {current_epoch} of {best_epoch + 1}")
 
     # Serialize model for later usage
-    torch.save([model, train_losses, val_losses, train_times, val_times], model_path)
+    torch.save([model, train_losses, val_losses, r2_scores, rmse_scores, train_times, val_times, retrain_times],
+               model_path)
     return model_path
 
 
@@ -236,13 +294,34 @@ def test(predict_device, test_device, model_path):
     model.to(predict_device)
     train_losses = data[1]
     val_losses = data[2]
+    r2_scores_val = data[3]
+    rmse_scores_val = data[4]
+    # Prepare the metadata for graphs
     best_val_loss = np.argmin(val_losses)
     highest_val_loss = np.maximum(np.max(val_losses), np.max(train_losses))
     lowest_train_loss = np.min(train_losses)
-    plt.xticks(range(len(train_losses)), range(1, len(train_losses)+1))
-    plt.plot(range(len(train_losses)), train_losses, 'b-')
-    plt.plot(range(len(val_losses)), val_losses, 'r-')
-    plt.plot([best_val_loss, best_val_loss], [lowest_train_loss, highest_val_loss], 'g-')
+    # Plot graphs
+    fig, (top_ax, bot_ax) = plt.subplots(2)
+    fig.suptitle("Training progress")
+    fig.set_size_inches(w=len(train_losses) * 0.4, h=10)
+
+    top_ax.set_ylabel("Loss value")
+    top_ax.plot(range(len(train_losses)), train_losses, color="blue", linestyle="solid", label="train loss")
+    top_ax.plot(range(len(val_losses)), val_losses, color="red", linestyle="solid", label="val loss")
+    top_ax.plot([best_val_loss, best_val_loss], [lowest_train_loss, highest_val_loss], color="green", linestyle="solid",
+                label="best epoch")
+
+    bot_ax.set_ylabel("Score value")
+    bot_ax.plot(range(len(r2_scores_val)), r2_scores_val, color="magenta", linestyle="solid", label="val R^2 score")
+    bot_ax.plot(range(len(rmse_scores_val)), rmse_scores_val, color="orange", linestyle="solid", label="val RMSE score")
+    bot_ax.legend()
+
+    for ax in fig.get_axes():
+        ax.set_xticks(range(len(train_losses)))
+        ax.set_xticklabels(range(1, len(train_losses) + 1))
+        ax.set_xlabel("Epoch #")
+        ax.legend()
+
     plt.show()
 
     # Prepare for predicting
@@ -273,19 +352,30 @@ def test(predict_device, test_device, model_path):
             np.save(true_data_name, y_true)
 
     # Evaluate
-    print("\nEvaluating...\n")
-    r2_scores_test = np.empty((31,))
-    rmse_scores_test = np.empty((31,))
-    for i in range(31):
-        r2_scores_test[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
-        rmse_scores_test[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
-
-    r2_score_test_avg = np.average(r2_scores_test)
-    rmse_score_test_avg = np.average(rmse_scores_test)
-    print(f'Average R2 score: {r2_score_test_avg}, Average RMSE score: {rmse_score_test_avg}')
+    print("\nEvaluating...")
+    r2_score_test_avg, rmse_score_test_avg = calculate_r2_and_rmse_scores(y_pred, y_true)
+    print(f'\nAverage R2 score: {r2_score_test_avg:.4f}')
+    print(f'Average RMSE score: {rmse_score_test_avg:.4f}\n')
 
     # More details
-    train_times = data[3]
-    val_times = data[4]
-    print(f"Average training time: {np.average(train_times) / 1000*1000*1000}s")
-    print(f"Average validating time: {np.average(val_times) / 1000*1000*1000}s")
+    train_times = data[5]
+    val_times = data[6]
+    retrain_times = data[7]
+
+    print_bar()
+    print("Average data")
+    print_bar()
+    print(f"Training time: {np.average(train_times):.2f}s")
+    print(f"Validating time: {np.average(val_times):.2f}s")
+    print(f"Retraining time: {np.average(retrain_times):.2f}s")
+
+    print_bar()
+    print("Total data")
+    print_bar()
+    print(f"Training time: {np.sum(train_times):.2f}s")
+    print(f"Validating time: {np.sum(val_times):.2f}s")
+    print(f"Retraining time: {np.sum(retrain_times):.2f}s")
+
+
+def print_bar():
+    print("=====================================================")
