@@ -21,8 +21,8 @@ def log10_transform_data(data):
 
 
 class CNFDatasetNode2Vec(Dataset):
-    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.6,
-                 val: float = 0.2, test: float = 0.2):
+    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.75,
+                 val: float = 0.1, test: float = 0.15):
         super(CNFDatasetNode2Vec).__init__()
         # Checks
         percents = [train, val, test]
