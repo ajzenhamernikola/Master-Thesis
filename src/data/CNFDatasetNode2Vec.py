@@ -81,29 +81,29 @@ class CNFDatasetNode2Vec(Dataset):
         indices = indices[low:high]
 
         # Pickle the graphs if they don't exist
-        print('\nPickling the graph data that doesn\'t exist...')
+        # print('\nPickling the graph data that doesn\'t exist...')
         for i in indices:
-            print(f"(Graph) Checking the pickled state of instance num {i}...")
+            # print(f"(Graph) Checking the pickled state of instance num {i}...")
             if self.check_if_pickled(i):
-                print(f"\tAlready pickled!")
+                # print(f"\tAlready pickled!")
                 continue
 
             # Pickle graph data
             self.create_edgelist_from_instance_id(i)
 
         # Pickle the features if they don't exist
-        print('\nPickling the feature data that doesn\'t exist...')
+        # print('\nPickling the feature data that doesn\'t exist...')
         for i in indices:
-            print(f"(Features) Checking the pickled state of instance num {i}...")
+            # print(f"(Features) Checking the pickled state of instance num {i}...")
             # If the data is pickled, then we have everything we need, so save the index
             if self.check_if_pickled_features(i):
-                print(f"\tAlready pickled!")
+                # print(f"\tAlready pickled!")
                 self.indices.append(i)
                 continue
 
             # If the graph is known to be unsuccessful, skip it
             if self.__is_unsuccessful_graph(i):
-                print(f"\tIs known to be unsuccessful... Skipping this instance!")
+                # print(f"\tIs known to be unsuccessful... Skipping this instance!")
                 continue
 
             # Finally, try to pickle feature data and save the index only if we succeed
@@ -153,22 +153,22 @@ class CNFDatasetNode2Vec(Dataset):
         edgelist_filename = os.path.join(self.root_dir, instance_id + '.edgelist')
 
         # Prepare graph for Node2Vec
-        print(f"\tPreparing graph for Node2vec...")
+        # print(f"\tPreparing graph for Node2vec...")
         v_graph = vite_graph.Graph()
         v_graph.load(edgelist_filename, as_undirected=False)
         v_graph_node_num = len(v_graph.id2name)
 
         # Prepare graph for DGL
-        print(f"\tPreparing graph for DGL...")
+        # print(f"\tPreparing graph for DGL...")
         g = self.load_pickled_graph(i)
         g_node_num = g.number_of_nodes()
 
         # Check if graphs have the same number of nodes
-        if v_graph_node_num == g_node_num:
-            print(f"\tNumber of nodes: {g_node_num}")
-        else:
-            print(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
+        if v_graph_node_num != g_node_num:
+            # print(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
             return False
+
+        # print(f"\tNumber of nodes: {g_node_num}")
 
         self.train_features(v_graph, i)
 
@@ -194,7 +194,7 @@ class CNFDatasetNode2Vec(Dataset):
 
     def create_edgelist_from_instance_id(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]
-        print(f'\tCreating the graph data for instance {instance_id}')
+        # print(f'\tCreating the graph data for instance {instance_id}')
         # Get the cnf file path
         pickled_filename, pickled_folder = self.extract_pickle_filename_and_folder(i)
 
@@ -207,7 +207,7 @@ class CNFDatasetNode2Vec(Dataset):
             raise FileNotFoundError(f"Could not find required edgelist file: {edgelist_filename}")
 
         # Prepare graph for DGL
-        print(f"\tPreparing graph for DGL...")
+        # print(f"\tPreparing graph for DGL...")
         edgelist = Edgelist(i)
         edgelist.load_from_file(edgelist_filename)
         graph_adj = SparseMatrix()
