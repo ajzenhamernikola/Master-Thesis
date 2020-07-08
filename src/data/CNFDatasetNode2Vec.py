@@ -83,6 +83,10 @@ class CNFDatasetNode2Vec(Dataset):
         # Pickle the graphs if they don't exist
         # print('\nPickling the graph data that doesn\'t exist...')
         for i in indices:
+            # Skip unsolvable indices
+            if not self.is_solvable(i):
+                continue
+
             # print(f"(Graph) Checking the pickled state of instance num {i}...")
             if self.check_if_pickled(i):
                 # print(f"\tAlready pickled!")
@@ -94,6 +98,10 @@ class CNFDatasetNode2Vec(Dataset):
         # Pickle the features if they don't exist
         # print('\nPickling the feature data that doesn\'t exist...')
         for i in indices:
+            # Skip unsolvable indices
+            if not self.is_solvable(i):
+                continue
+
             # print(f"(Features) Checking the pickled state of instance num {i}...")
             # If the data is pickled, then we have everything we need, so save the index
             if self.check_if_pickled_features(i):
@@ -114,20 +122,20 @@ class CNFDatasetNode2Vec(Dataset):
                 self.__commit_new_unsuccessful_graph(i)
 
         # Load ys
-        final_indices = []
         for i in self.indices:
             # Get the cnf file path
-            instance_id: str = self.csv_data_x['instance_id'][i]
-            ys = self.csv_data_y[self.csv_data_y['instance_id'] == instance_id]
-            ys = np.array(ys.drop(columns=['instance_id']).iloc[0], dtype=np.float32)
-            non_solvable = np.all(ys == 1200.0)
-            if non_solvable:
-                continue
+            ys = self.get_ys(i)
             ys = log10_transform_data(ys)
             self.ys.append(ys)
-            final_indices.append(i)
 
-        self.indices = final_indices
+    def get_ys(self, i):
+        instance_id: str = self.csv_data_x['instance_id'][i]
+        ys = self.csv_data_y[self.csv_data_y['instance_id'] == instance_id]
+        return np.array(ys.drop(columns=['instance_id']).iloc[0], dtype=np.float32)
+
+    def is_solvable(self, i):
+        ys = self.get_ys(i)
+        return not np.all(ys == 1200.0)
 
     def __commit_new_unsuccessful_graph(self, i):
         self.__unsuccessful_indices.append(i)
