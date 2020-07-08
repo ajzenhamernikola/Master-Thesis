@@ -160,6 +160,19 @@ def calculate_r2_and_rmse_scores(y_pred, y_true):
     return r2_score_val_avg, rmse_score_val_avg
 
 
+def time_for_early_stopping(val_losses, no_progress_max):
+    if len(val_losses) <= no_progress_max:
+        return False
+
+    last_epoch = val_losses[-1]
+    prev_epoch = val_losses[-no_progress_max]
+
+    neg_slope = prev_epoch < last_epoch
+    no_significant_progress = prev_epoch - last_epoch < 0.1 * np.average(val_losses[-no_progress_max:])
+
+    return neg_slope or no_significant_progress
+
+
 # Train the model
 def train(train_device, test_device):
     # Load train data
@@ -194,13 +207,16 @@ def train(train_device, test_device):
 
     # Model name
     mfn = f'gcn_{hidden_layers}_{dropout_p}_{pooling}_{activation}_{lr}_{w_decay}_{epochs}_{loss}'
-    model_path = os.path.join(os.path.dirname(__file__), '..', '..', 'models', mfn)
+    model_root = os.path.join(os.path.dirname(__file__), '..', '..', 'models', f"model_{mfn}")
+    if not os.path.exists(model_root):
+        os.makedirs(model_root)
+    model_path = os.path.join(model_root, mfn)
     if os.path.exists(model_path):
         print("\nModel had already been trained!")
         return model_path
     
     # Create a logger
-    log = FileLogger(mfn)
+    log = FileLogger(model_root, mfn)
 
     log.log_bar()
     log.log_line(f"Model name: {mfn}")
@@ -255,7 +271,6 @@ def train(train_device, test_device):
     val_times = []
     best_epoch = -1
     best_val_loss = None
-    no_progress_count = 0
     for current_epoch in range(1, epochs + 1):
         # Train on training data
         time_start = timer()
@@ -275,21 +290,20 @@ def train(train_device, test_device):
         rmse_scores.append(rmse_score_val_avg)
 
         # Early stopping
-        if current_epoch == 1:
+        if time_for_early_stopping(val_losses, no_progress_max):
+            log.log_line(
+                f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
+            log.log_line(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
+            break
+
+        # Remember the best validation loss
+        if best_val_loss is None:
             best_val_loss = val_loss
-            best_epoch = 1
+            best_epoch = current_epoch
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_epoch = current_epoch
-            no_progress_count = 0
-        else:
-            no_progress_count += 1
-
-        if no_progress_count == no_progress_max:
-            log.log_line(f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
-            log.log_line(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
-            break
 
         log.log_line(f'\nEpoch {current_epoch} summary:')
         log.log_line(f'\tTrain loss: {train_loss}')

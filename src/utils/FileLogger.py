@@ -2,9 +2,8 @@ import os
 
 
 class FileLogger(object):
-    def __init__(self, file_name, print_to_stdout=True):
-        self.file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "models",
-                                                      f"report_{file_name}.txt"))
+    def __init__(self, file_root, file_name, print_to_stdout=True):
+        self.file_path = os.path.abspath(os.path.join(file_root, f"report_{file_name}.txt"))
         self.file = None
         self.print_to_stdout = print_to_stdout
         self.overwrite = True
