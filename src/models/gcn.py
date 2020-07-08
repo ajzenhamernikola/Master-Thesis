@@ -48,13 +48,14 @@ class RMSELoss(nn.Module):
 
 
 class Regressor(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, activation, activation_params, dropout_p,
+    def __init__(self, input_dim, output_dim, hidden_layers, activation, activation_params, dropout_p,
                  pooling="avg"):
         super(Regressor, self).__init__()
 
         # Checks
-        if num_layers < 2:
-            raise ValueError(f"Argument num_layers must be >= 2. You passed {num_layers}")
+        num_layers = len(hidden_layers)
+        if num_layers < 1:
+            raise ValueError(f"You must have at least one hidden layer. You passed {num_layers}: {hidden_layers}")
 
         if activation == "relu":
             self.activation = nn.ReLU(**activation_params)
@@ -69,10 +70,10 @@ class Regressor(nn.Module):
 
         self.layers = nn.ModuleList()
         # Input layer
-        self.layers.append(GraphConv(input_dim, hidden_dim))
+        self.layers.append(GraphConv(input_dim, hidden_layers[0]))
         # Hidden layers
         for i in range(num_layers - 1):
-            self.layers.append(GraphConv(hidden_dim, hidden_dim))
+            self.layers.append(GraphConv(hidden_layers[i], hidden_layers[i + 1]))
 
         # Additional layers
         if pooling == "avg":
@@ -84,7 +85,7 @@ class Regressor(nn.Module):
         else:
             raise NotImplementedError(f"Unknown pooling method: {pooling}")
 
-        self.linear = nn.Linear(hidden_dim, output_dim)
+        self.linear = nn.Linear(hidden_layers[-1], output_dim)
         self.dropout = nn.Dropout(p=dropout_p)
 
     def forward(self, g: dgl.DGLGraph):
@@ -177,23 +178,22 @@ def train(train_device, test_device):
 
     # Model params
     input_dim = trainset.data_dim
-    hidden_dim = 128
     output_dim = 31
-    num_layers = 3
-    activation = "elu"
-    activation_params = {"alpha": 0.2}
+    hidden_layers = [20, 10]
+    activation = "relu"
+    activation_params = {}
     dropout_p = 0.3
     pooling = "avg"
     # Optimizer params
-    lr = 1e-5
-    w_decay = 1e-3
+    lr = 1e-4
+    w_decay = 1e-4
     loss = "mse"
     # Num of epochs
     epochs = 200
     no_progress_max = 5
 
     # Model name
-    mfn = f'gcn_{hidden_dim}_{num_layers}_{dropout_p}_{pooling}_{activation}_{lr}_{w_decay}_{epochs}_{loss}'
+    mfn = f'gcn_{hidden_layers}_{dropout_p}_{pooling}_{activation}_{lr}_{w_decay}_{epochs}_{loss}'
     model_path = os.path.join(os.path.dirname(__file__), '..', '..', 'models', mfn)
     if os.path.exists(model_path):
         print("\nModel had already been trained!")
@@ -208,9 +208,8 @@ def train(train_device, test_device):
     log.log_line("Model parameters")
     log.log_bar()
     log.log_line(f"Features dimension: {input_dim}")
-    log.log_line(f"Dimension of hidden layers: {hidden_dim}")
+    log.log_line(f"Dimensions of hidden layers: {hidden_layers}")
     log.log_line(f"Output dimension: {output_dim}")
-    log.log_line(f"Number of hidden layers: {num_layers}")
     log.log_line(f"Activation function: {activation}")
     log.log_line(f"Activation function params: {activation_params}")
     log.log_line(f"Dropout: {dropout_p}")
@@ -227,9 +226,8 @@ def train(train_device, test_device):
 
     # Create model
     model = Regressor(input_dim,
-                      hidden_dim,
                       output_dim,
-                      num_layers,
+                      hidden_layers,
                       activation,
                       activation_params,
                       dropout_p,
