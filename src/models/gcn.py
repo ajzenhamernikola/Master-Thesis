@@ -210,13 +210,14 @@ def train(train_device, test_device):
     model_root = os.path.join(os.path.dirname(__file__), '..', '..', 'models', f"model_{mfn}")
     if not os.path.exists(model_root):
         os.makedirs(model_root)
+
+    # Create a logger
+    log = FileLogger(model_root, mfn)
+
     model_path = os.path.join(model_root, mfn)
     if os.path.exists(model_path):
         print("\nModel had already been trained!")
-        return model_path
-    
-    # Create a logger
-    log = FileLogger(model_root, mfn)
+        return model_path, log
 
     log.log_bar()
     log.log_line(f"Model name: {mfn}")

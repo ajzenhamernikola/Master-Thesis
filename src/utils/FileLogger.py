@@ -15,7 +15,7 @@ class FileLogger(object):
             self.overwrite = input().lower() == "y"
 
     def __del__(self):
-        with open(self.file_path, "w" if self.overwrite else "a") as file:
+        with open(self.file_path, "w" if self.overwrite else "a", encoding='utf-8') as file:
             file.write(''.join(self.buffer))
 
     def log_line(self, line: str):
