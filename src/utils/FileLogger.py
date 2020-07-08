@@ -7,32 +7,30 @@ class FileLogger(object):
                                                       f"report_{file_name}.txt"))
         self.file = None
         self.print_to_stdout = print_to_stdout
+        self.overwrite = True
+        self.buffer = []
 
         # Checks
         if os.path.exists(self.file_path):
             print(f"The file {self.file_path} already exists. Overwrite? [y/n]")
-            overwrite = input().lower() == "y"
-            if not overwrite:
-                self.file = open(self.file_path, "a")
-                return
-
-        self.file = open(self.file_path)
+            self.overwrite = input().lower() == "y"
 
     def __del__(self):
-        self.file.close()
+        with open(self.file_path, "w" if self.overwrite else "a") as file:
+            file.write(''.join(self.buffer))
 
     def log_line(self, line: str):
-        self.file.write(f"{line}\n")
+        self.buffer.append(f"{line}\n")
         if self.print_to_stdout:
             print(line)
 
     def log(self, something: str):
-        self.file.write(something)
+        self.buffer.append(something)
         if self.print_to_stdout:
             print(something, end="")
 
     def log_bar(self):
-        bar = "============================================================\n"
-        self.file.write(bar)
+        bar = "============================================================"
+        self.buffer.append(f"{bar}\n")
         if self.print_to_stdout:
             print(bar)
