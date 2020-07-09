@@ -16,7 +16,7 @@ from src.utils.FileLogger import FileLogger
 
 DatasetClass = CNFDatasetNode2Vec
 csv_file_x = os.path.join(os.path.dirname(__file__),
-                          '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_5000_max_clauses_200000.csv')
+                          '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_50000_max_clauses_600000.csv')
 csv_file_y = os.path.join(os.path.dirname(__file__),
                           '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
 root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
@@ -141,7 +141,7 @@ def validate_one_epoch(model, loss_func, data_loader_val, train_device, test_dev
         y_pred = np.vstack((y_pred, pred_y))
         y_true = np.vstack((y_true, label.to(test_device)))
 
-    r2_score_val_avg, rmse_score_val_avg = calculate_r2_and_rmse_scores(y_pred, y_true)
+    r2_score_val_avg, rmse_score_val_avg, _, _ = calculate_r2_and_rmse_scores(y_pred, y_true)
 
     return np.round([val_loss / (iter_num + 1), r2_score_val_avg, rmse_score_val_avg], 3)
 
@@ -157,7 +157,7 @@ def calculate_r2_and_rmse_scores(y_pred, y_true):
     r2_score_val_avg = np.average(r2_scores_val)
     rmse_score_val_avg = np.average(rmse_scores_val)
 
-    return r2_score_val_avg, rmse_score_val_avg
+    return r2_score_val_avg, rmse_score_val_avg, r2_scores_val, rmse_scores_val
 
 
 def time_for_early_stopping(val_losses, no_progress_max):
@@ -168,7 +168,7 @@ def time_for_early_stopping(val_losses, no_progress_max):
     prev_epoch = val_losses[-no_progress_max]
 
     neg_slope = prev_epoch < last_epoch
-    no_significant_progress = prev_epoch - last_epoch < 0.1 * np.average(val_losses[-no_progress_max:])
+    no_significant_progress = prev_epoch - last_epoch < 0.075 * np.average(val_losses[-no_progress_max:])
 
     return neg_slope or no_significant_progress
 
@@ -192,18 +192,18 @@ def train(train_device, test_device):
     # Model params
     input_dim = trainset.data_dim
     output_dim = 31
-    hidden_layers = [20, 10]
-    activation = "relu"
-    activation_params = {}
-    dropout_p = 0.3
+    hidden_layers = [50, 25]
+    activation = "elu"
+    activation_params = {"alpha": 0.2}
+    dropout_p = 0.2
     pooling = "avg"
     # Optimizer params
-    lr = 1e-4
+    lr = 8e-5
     w_decay = 1e-4
     loss = "mse"
     # Num of epochs
     epochs = 200
-    no_progress_max = 5
+    no_progress_max = 10
 
     # Model name
     mfn = f'gcn_{hidden_layers}_{dropout_p}_{pooling}_{activation}_{lr}_{w_decay}_{epochs}_{loss}'
@@ -216,8 +216,10 @@ def train(train_device, test_device):
 
     model_path = os.path.join(model_root, mfn)
     if os.path.exists(model_path):
-        print("\nModel had already been trained!")
-        return model_path, log
+        print("\nModel had already been trained! Overwrite? [y/n] ")
+        overwrite = input().lower() == "y"
+        if not overwrite:
+            return model_path, log
 
     log.log_bar()
     log.log_line(f"Model name: {mfn}")
@@ -290,13 +292,6 @@ def train(train_device, test_device):
         r2_scores.append(r2_score_val_avg)
         rmse_scores.append(rmse_score_val_avg)
 
-        # Early stopping
-        if time_for_early_stopping(val_losses, no_progress_max):
-            log.log_line(
-                f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
-            log.log_line(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
-            break
-
         # Remember the best validation loss
         if best_val_loss is None:
             best_val_loss = val_loss
@@ -305,6 +300,13 @@ def train(train_device, test_device):
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_epoch = current_epoch
+
+        # Early stopping
+        if time_for_early_stopping(val_losses, no_progress_max):
+            log.log_line(
+                f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
+            log.log_line(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
+            break
 
         log.log_line(f'\nEpoch {current_epoch} summary:')
         log.log_line(f'\tTrain loss: {train_loss}')
@@ -367,6 +369,7 @@ def test(predict_device, test_device, model_path: str, log: FileLogger):
         ax.legend()
 
     plt.savefig(model_path + '.png')
+    plt.close()
 
     # Prepare for predicting
     model.eval()
@@ -397,9 +400,34 @@ def test(predict_device, test_device, model_path: str, log: FileLogger):
 
     # Evaluate
     log.log_line("\nEvaluating...")
-    r2_score_test_avg, rmse_score_test_avg = calculate_r2_and_rmse_scores(y_pred, y_true)
+    r2_score_test_avg, rmse_score_test_avg, r2_scores_test, rmse_scores_test = \
+        calculate_r2_and_rmse_scores(y_pred, y_true)
     log.log_line(f'\nAverage R2 score: {r2_score_test_avg:.4f}')
     log.log_line(f'Average RMSE score: {rmse_score_test_avg:.4f}\n')
+
+    # Prediction graphs per solver
+    solver_names = ["ebglucose", "ebminisat", "glucose2", "glueminisat", "lingeling", "lrglshr", "minisatpsm",
+                    "mphaseSAT64", "precosat", "qutersat", "rcl", "restartsat", "cryptominisat2011", "spear-sw",
+                    "spear-hw", "eagleup", "sparrow", "marchrw", "mphaseSATm", "satime11", "tnm", "mxc09", "gnoveltyp2",
+                    "sattime", "sattimep", "clasp2", "clasp1", "picosat", "mphaseSAT", "sapperlot", "sol"]
+    plt.figure(figsize=(15, 4))
+
+    plt.subplot(1, 2, 1)
+    xticks = range(1, len(r2_scores_test) + 1)
+    plt.title('R2 scores per solver')
+    plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
+    plt.bar(xticks, r2_scores_test, color='#578FF7')
+    plt.plot([xticks[0], xticks[-1]], [r2_score_test_avg, r2_score_test_avg], 'r-')
+
+    plt.subplot(1, 2, 2)
+    xticks = range(1, len(rmse_scores_test) + 1)
+    plt.title('RMSE scores per solver')
+    plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
+    plt.bar(xticks, rmse_scores_test, color='#FA6A68')
+    plt.plot([xticks[0], xticks[-1]], [rmse_score_test_avg, rmse_score_test_avg], 'b-')
+
+    plt.savefig(f"{model_path}_scores_per_solver.png")
+    plt.close()
 
     # More details
     train_times = data[5]

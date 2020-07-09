@@ -21,8 +21,8 @@ def log10_transform_data(data):
 
 
 class CNFDatasetNode2Vec(Dataset):
-    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.8,
-                 val: float = 0.1, test: float = 0.1):
+    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, data_type: str = "train", train: float = 0.7,
+                 val: float = 0.15, test: float = 0.15):
         super(CNFDatasetNode2Vec).__init__()
         # Checks
         percents = [train, val, test]
@@ -54,9 +54,7 @@ class CNFDatasetNode2Vec(Dataset):
         print(f"\nPreparing the dataset for phase: {data_type}")
 
         # Create the folder for pickling data
-        csv_x = csv_file_x[csv_file_x.rfind(os.sep, 0, -1) + 1:-4]
-        assert (csv_x != "" and csv_x.find(os.sep) == -1)
-        csv_x_folder = os.path.join(os.path.dirname(__file__), "..", "..", self.data_dir, csv_x)
+        csv_x_folder = os.path.join(os.path.dirname(__file__), "..", "..", self.data_dir)
         if not os.path.exists(csv_x_folder):
             os.makedirs(csv_x_folder)
         self.csv_x_folder = csv_x_folder
@@ -81,37 +79,41 @@ class CNFDatasetNode2Vec(Dataset):
         indices = indices[low:high]
 
         # Pickle the graphs if they don't exist
-        # print('\nPickling the graph data that doesn\'t exist...')
+        print('\nPickling the graph data that doesn\'t exist...')
         for i in indices:
+            print(f"(Graph) Checking the pickled state of instance num {i}...")
+
             # Skip unsolvable indices
             if not self.is_solvable(i):
+                print("\tNonsolvable - skipping")
                 continue
 
-            # print(f"(Graph) Checking the pickled state of instance num {i}...")
             if self.check_if_pickled(i):
-                # print(f"\tAlready pickled!")
+                print(f"\tAlready pickled!")
                 continue
 
             # Pickle graph data
             self.create_edgelist_from_instance_id(i)
 
         # Pickle the features if they don't exist
-        # print('\nPickling the feature data that doesn\'t exist...')
+        print('\nPickling the feature data that doesn\'t exist...')
         for i in indices:
+            print(f"(Features) Checking the pickled state of instance num {i}...")
+
             # Skip unsolvable indices
             if not self.is_solvable(i):
+                print("\tNonsolvable: skipping...")
                 continue
 
-            # print(f"(Features) Checking the pickled state of instance num {i}...")
             # If the data is pickled, then we have everything we need, so save the index
             if self.check_if_pickled_features(i):
-                # print(f"\tAlready pickled!")
+                print(f"\tAlready pickled!")
                 self.indices.append(i)
                 continue
 
             # If the graph is known to be unsuccessful, skip it
             if self.__is_unsuccessful_graph(i):
-                # print(f"\tIs known to be unsuccessful... Skipping this instance!")
+                print(f"\tIs known to be unsuccessful... Skipping this instance!")
                 continue
 
             # Finally, try to pickle feature data and save the index only if we succeed
