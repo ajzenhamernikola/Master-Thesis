@@ -16,7 +16,7 @@ from src.utils.FileLogger import FileLogger
 
 DatasetClass = CNFDatasetNode2Vec
 csv_file_x = os.path.join(os.path.dirname(__file__),
-                          '..', '..', 'INSTANCES', 'chosen_data', 'max_vars_50000_max_clauses_600000.csv')
+                          '..', '..', 'INSTANCES', 'chosen_data', 'splits.csv')
 csv_file_y = os.path.join(os.path.dirname(__file__),
                           '..', '..', 'INSTANCES', 'chosen_data', 'all_data_y.csv')
 root_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'INSTANCES')
@@ -175,30 +175,32 @@ def time_for_early_stopping(val_losses, no_progress_max):
 
 # Train the model
 def train(train_device, test_device):
+    batch_size = 25
+
     # Load train data
-    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train")
-    data_loader_train = DataLoader(trainset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
+    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Train")
+    data_loader_train = DataLoader(trainset, batch_size=batch_size, shuffle=True, collate_fn=collate(train_device))
 
     # Load val data
-    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "val")
-    data_loader_val = DataLoader(valset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
+    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Validation")
+    data_loader_val = DataLoader(valset, batch_size=batch_size, shuffle=True, collate_fn=collate(train_device))
 
     # Load train+val data
-    trainvalset = DatasetClass(csv_file_x, csv_file_y, root_dir, "train+val")
-    data_loader_trainval = DataLoader(trainvalset, batch_size=1, shuffle=True, collate_fn=collate(train_device))
+    trainvalset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Train+Validation")
+    data_loader_trainval = DataLoader(trainvalset, batch_size=batch_size, shuffle=True, collate_fn=collate(train_device))
 
     print("\n")
 
     # Model params
-    input_dim = trainset.data_dim
+    input_dim = trainset.hidden_features_dim
     output_dim = 31
-    hidden_layers = [50, 25]
-    activation = "elu"
-    activation_params = {"alpha": 0.2}
+    hidden_layers = [35, 35, 35, 35, 35]
+    activation = "leaky"
+    activation_params = {"negative_slope": 0.3}
     dropout_p = 0.2
     pooling = "avg"
     # Optimizer params
-    lr = 8e-5
+    lr = 5e-4
     w_decay = 1e-4
     loss = "mse"
     # Num of epochs
@@ -309,8 +311,8 @@ def train(train_device, test_device):
             break
 
         log.log_line(f'\nEpoch {current_epoch} summary:')
-        log.log_line(f'\tTrain loss: {train_loss}')
-        log.log_line(f'\tValidation loss: {val_loss}')
+        log.log_line(f'\tTrain loss: {train_loss}; training time: {train_times[-1]:.2f}s')
+        log.log_line(f'\tValidation loss: {val_loss}; validation time: {val_times[-1]:.2f}s')
         log.log_line(f'\tValidation R^2 score: {r2_score_val_avg}')
         log.log_line(f'\tValidation RMSE score: {rmse_score_val_avg}')
 
@@ -332,7 +334,7 @@ def train(train_device, test_device):
 
 # Test the model
 def test(predict_device, test_device, model_path: str, log: FileLogger):
-    testset = DatasetClass(csv_file_x, csv_file_y, root_dir, "test")
+    testset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Test")
     data_loader_test = DataLoader(testset, batch_size=1, shuffle=True, collate_fn=collate(predict_device))
 
     # Load the model
