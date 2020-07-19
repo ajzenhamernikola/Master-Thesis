@@ -51,7 +51,7 @@ class CNFDatasetNode2Vec(Dataset):
         self.hidden_features_type = "node2vec"
         # Keep track of unsuccessfully loaded data, so we can skip them faster
         self.__unsuccessful_txt = os.path.join(os.path.dirname(__file__), "..", "..", self.data_dir,
-                                               f"{self.hidden_features_type}_unsuccessful.txt")
+                                               f"{self.hidden_features_type}{self.hidden_features_dim}_unsuccessful.txt")
         self.__load_already_known_unsuccessful_graphs()
         print(f"\nPreparing the dataset for phase: {splits}")
 
