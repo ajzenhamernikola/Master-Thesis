@@ -69,11 +69,14 @@ class Regressor(nn.Module):
             raise NotImplementedError(f"Unknown activation method: {pooling}")
 
         self.layers = nn.ModuleList()
+        self.bn_layers = nn.ModuleList()
         # Input layer
         self.layers.append(GraphConv(input_dim, hidden_layers[0]))
+        self.bn_layers.append(nn.BatchNorm1d(hidden_layers[0]))
         # Hidden layers
         for i in range(num_layers - 1):
             self.layers.append(GraphConv(hidden_layers[i], hidden_layers[i + 1]))
+            self.bn_layers.append(nn.BatchNorm1d(hidden_layers[i + 1]))
 
         # Additional layers
         if pooling == "avg":
@@ -96,6 +99,7 @@ class Regressor(nn.Module):
             if i != 0:
                 h = self.dropout(h)
             h = layer(g, h)
+            h = self.bn_layers[i](h)
             h = self.activation(h)
 
         # Perform pooling over all nodes in each graph in every layer
@@ -175,7 +179,7 @@ def time_for_early_stopping(val_losses, no_progress_max):
 
 # Train the model
 def train(train_device, test_device):
-    batch_size = 25
+    batch_size = 1
 
     # Load train data
     trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Train")
@@ -194,18 +198,18 @@ def train(train_device, test_device):
     # Model params
     input_dim = trainset.hidden_features_dim
     output_dim = 31
-    hidden_layers = [35, 35, 35, 35, 35]
+    hidden_layers = [50, 45, 40]
     activation = "leaky"
-    activation_params = {"negative_slope": 0.3}
-    dropout_p = 0.2
+    activation_params = {"negative_slope": 0.6}
+    dropout_p = 0.1
     pooling = "avg"
     # Optimizer params
-    lr = 5e-4
+    lr = 1e-4
     w_decay = 1e-4
     loss = "mse"
     # Num of epochs
     epochs = 200
-    no_progress_max = 10
+    no_progress_max = 7
 
     # Model name
     mfn = f'gcn_{hidden_layers}_{dropout_p}_{pooling}_{activation}_{lr}_{w_decay}_{epochs}_{loss}'

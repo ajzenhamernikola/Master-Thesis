@@ -45,7 +45,7 @@ class CNFDatasetNode2Vec(Dataset):
         self.ys = []
         self.csv_data_x = pd.read_csv(csv_file_x)
         self.csv_data_y = pd.read_csv(csv_file_y)
-        self.hidden_features_dim = 32
+        self.hidden_features_dim = 64
         self.indices = []
         self.data_dir = "data"
         self.hidden_features_type = "node2vec"
@@ -210,9 +210,6 @@ class CNFDatasetNode2Vec(Dataset):
         # Get the cnf file path
         pickled_filename, pickled_folder = self.extract_pickle_filename_and_folder(i)
 
-        if not os.path.exists(pickled_folder):
-            os.makedirs(pickled_folder)
-
         # Load the edgelist data and create sparse matrix
         edgelist_filename = os.path.join(self.root_dir, instance_id + '.edgelist')
         if not os.path.exists(edgelist_filename):
@@ -245,8 +242,12 @@ class CNFDatasetNode2Vec(Dataset):
         ext = f".{self.hidden_features_type}{self.hidden_features_dim}" if features else ".graph"
         pickled_filename = os.path.join(self.csv_x_folder, *instance_loc, instance_name + ext)
         pickled_folder = os.path.dirname(pickled_filename)
+        if os.path.exists(pickled_folder) and not os.path.isdir(pickled_folder):
+            os.remove(pickled_folder)
+        if not os.path.exists(pickled_folder):
+            os.makedirs(pickled_folder)
 
-        return pickled_filename, pickled_folder
+        return os.path.abspath(pickled_filename), os.path.abspath(pickled_folder)
 
     def __len__(self):
         return len(self.indices)
