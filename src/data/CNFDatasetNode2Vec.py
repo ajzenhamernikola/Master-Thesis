@@ -66,10 +66,7 @@ class CNFDatasetNode2Vec(Dataset):
         self.csv_x_folder = csv_x_folder
 
         # Load the data
-        n = len(self.csv_data_x)
-        indices = list(range(n))
-        random.seed(0)
-        random.shuffle(indices)
+        indices = list(self.csv_data_x.index)
 
         # Pickle the graphs if they don't exist
         print('\nPickling the graph data that doesn\'t exist...')
@@ -78,6 +75,7 @@ class CNFDatasetNode2Vec(Dataset):
 
             # Skip unsolvable indices
             if not self.is_solvable(i):
+                self.__commit_new_unsuccessful_graph(i)
                 # print("\tNonsolvable - skipping")
                 continue
 
@@ -109,12 +107,9 @@ class CNFDatasetNode2Vec(Dataset):
                 # print(f"\tIs known to be unsuccessful... Skipping this instance!")
                 continue
 
-            # Finally, try to pickle feature data and save the index only if we succeed
-            save_indices = self.create_node2vec_features(i)
-            if save_indices:
-                self.indices.append(i)
-            else:
-                self.__commit_new_unsuccessful_graph(i)
+            # Finally, try to pickle feature data and save the index
+            self.create_node2vec_features(i)
+            self.indices.append(i)
 
         # Load ys
         for i in self.indices:
@@ -135,9 +130,11 @@ class CNFDatasetNode2Vec(Dataset):
         return not np.all(ys == 1200.0)
 
     def __commit_new_unsuccessful_graph(self, i):
-        self.__unsuccessful_indices.append(i)
+        instance_id: str = self.csv_data_x['instance_id'][i]
+        self.__unsuccessful_indices.append(instance_id)
         with open(self.__unsuccessful_txt, 'w') as f:
-            f.write(" ".join(map(lambda num: str(num), self.__unsuccessful_indices)))
+            for inst in self.__unsuccessful_indices:
+                f.write(inst.strip() + '\n')
 
     def __load_already_known_unsuccessful_graphs(self):
         if not os.path.exists(self.__unsuccessful_txt):
@@ -145,10 +142,11 @@ class CNFDatasetNode2Vec(Dataset):
             return
 
         with open(self.__unsuccessful_txt, 'r') as f:
-            self.__unsuccessful_indices = list(map(lambda numstr: int(numstr), f.read().split(" ")))
+            self.__unsuccessful_indices = list(map(lambda x: x.strip(), f.readlines()))
 
     def __is_unsuccessful_graph(self, i):
-        return i in self.__unsuccessful_indices
+        instance_id: str = self.csv_data_x['instance_id'][i]
+        return self.__unsuccessful_indices.count(instance_id) > 0
 
     def load_pickled_graph(self, i):
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i)
@@ -177,14 +175,15 @@ class CNFDatasetNode2Vec(Dataset):
 
         # Check if graphs have the same number of nodes
         if v_graph_node_num != g_node_num:
-            # print(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
-            return False
+            # if v_graph_node_num < 1000:
+            #     for j in range(g_node_num):
+            #         if str(j) not in v_graph.id2name:
+            #             print(j)
+            raise ValueError(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
 
         # print(f"\tNumber of nodes: {g_node_num}")
 
         self.train_features(v_graph, i)
-
-        return True
 
     def train_features(self, v_graph, i):
         # Train Node2Vec hidden data
@@ -195,14 +194,17 @@ class CNFDatasetNode2Vec(Dataset):
                     negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
 
         # Extract embedded feature data
-        features = np.array(np.copy(embed.vertex_embeddings), dtype=np.float32)
+        sorted_features = np.empty(embed.vertex_embeddings.shape, dtype=np.float32)
+        id2name = list(map(lambda x: int(x), v_graph.id2name))
+        for j in range(embed.vertex_embeddings.shape[0]):
+            sorted_features[id2name[j], :] = embed.vertex_embeddings[j]
 
         # Clear memory and data on CPU and GPU
         embed.clear()
 
         # Pickle hidden feature data
         pickled_filename, _ = self.extract_pickle_filename_and_folder(i, features=True)
-        np.save(pickled_filename, features)
+        np.save(pickled_filename, sorted_features)
 
     def create_edgelist_from_instance_id(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]

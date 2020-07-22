@@ -4,8 +4,8 @@
 WD="./"
 PRINT_CATEGORIES=false
 PLOT_FILESIZES=false
-PLOT_FILTERED_DATA=true
-SATZILLA=true
+PLOT_FILTERED_DATA=false
+SATZILLA=false
 EDGELIST=true
 
 # Run code

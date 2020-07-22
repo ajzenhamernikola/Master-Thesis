@@ -164,6 +164,9 @@ int parse_dimacs_to_edgelist(const char *base_dir, const char *file_name)
             edgelist->AddANeighbour(clause_idx, var_idx);
             // Connect the node with the clause
             edgelist->AddANeighbour(var_idx, clause_idx);
+            // Add loops
+            edgelist->AddANeighbour(var_idx, var_idx);
+            edgelist->AddANeighbour(clause_idx, clause_idx);
         }
 
         // Move on to the next clause
