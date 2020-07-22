@@ -372,3 +372,4 @@ CppProperties.json
 
 # Global excludes
 !src/data
+!src/models
