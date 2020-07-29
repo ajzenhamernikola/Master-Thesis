@@ -68,15 +68,18 @@ class CNFDatasetNode2Vec(Dataset):
         # Load the data
         indices = list(self.csv_data_x.index)
 
+        # percent = 0.1
+        # indices = indices[:int(percent*len(indices))]
+
         # Pickle the graphs if they don't exist
         print('\nPickling the graph data that doesn\'t exist...')
         for i in indices:
-            # print(f"(Graph) Checking the pickled state of instance num {i}...")
+            print(f"(Graph) Checking the pickled state of instance num {i+1}/{len(indices)}...")
 
             # Skip unsolvable indices
             if not self.is_solvable(i):
-                self.__commit_new_unsuccessful_graph(i)
                 # print("\tNonsolvable - skipping")
+                self.__commit_new_unsuccessful_graph(i)
                 continue
 
             if self.check_if_pickled(i):
@@ -86,13 +89,15 @@ class CNFDatasetNode2Vec(Dataset):
             # Pickle graph data
             self.create_edgelist_from_instance_id(i)
 
+        wrong_instances = []
+
         # Pickle the features if they don't exist
         print('\nPickling the feature data that doesn\'t exist...')
         for i in indices:
             # print(f"(Features) Checking the pickled state of instance num {i}...")
 
             # Skip unsolvable indices
-            if not self.is_solvable(i):
+            if self.__is_unsuccessful_graph(i):
                 # print("\tNonsolvable: skipping...")
                 continue
 
@@ -102,14 +107,23 @@ class CNFDatasetNode2Vec(Dataset):
                 self.indices.append(i)
                 continue
 
-            # If the graph is known to be unsuccessful, skip it
-            if self.__is_unsuccessful_graph(i):
-                # print(f"\tIs known to be unsuccessful... Skipping this instance!")
-                continue
-
             # Finally, try to pickle feature data and save the index
-            self.create_node2vec_features(i)
-            self.indices.append(i)
+            try:
+                self.create_node2vec_features(i)
+                self.indices.append(i)
+            except ValueError as e:
+                instance_id: str = self.csv_data_x['instance_id'][i]
+                edgelist_filename = os.path.join(self.root_dir, instance_id + '.edgelist')
+                wrong_instances.append(edgelist_filename)
+                print(e)
+
+        wrong_instances_filename = f"edgelist_wrong_{'+'.join(splits)}.txt"
+        if len(wrong_instances) > 0:
+            with open(wrong_instances_filename, "w") as file:
+                file.write("\n".join(wrong_instances))
+        else:
+            if os.path.exists(wrong_instances_filename):
+                os.remove(wrong_instances_filename)
 
         # Load ys
         for i in self.indices:
@@ -118,7 +132,7 @@ class CNFDatasetNode2Vec(Dataset):
             ys = log10_transform_data(ys)
             self.ys.append(ys)
 
-        print(f"Number of instances in this dataset is: {len(self.indices)}")
+        print(f"\nNumber of instances in this dataset is: {len(self.indices)}")
 
     def get_ys(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]
@@ -133,8 +147,10 @@ class CNFDatasetNode2Vec(Dataset):
         instance_id: str = self.csv_data_x['instance_id'][i]
         self.__unsuccessful_indices.append(instance_id)
         with open(self.__unsuccessful_txt, 'w') as f:
-            for inst in self.__unsuccessful_indices:
-                f.write(inst.strip() + '\n')
+            sorted_instances = list(set(map(lambda x: x.strip() + '\n', self.__unsuccessful_indices)))
+            sorted_instances.sort()
+            for inst in sorted_instances:
+                f.write(inst)
 
     def __load_already_known_unsuccessful_graphs(self):
         if not os.path.exists(self.__unsuccessful_txt):
@@ -142,7 +158,7 @@ class CNFDatasetNode2Vec(Dataset):
             return
 
         with open(self.__unsuccessful_txt, 'r') as f:
-            self.__unsuccessful_indices = list(map(lambda x: x.strip(), f.readlines()))
+            self.__unsuccessful_indices = list(set(map(lambda x: x.strip(), f.readlines())))
 
     def __is_unsuccessful_graph(self, i):
         instance_id: str = self.csv_data_x['instance_id'][i]
@@ -175,11 +191,7 @@ class CNFDatasetNode2Vec(Dataset):
 
         # Check if graphs have the same number of nodes
         if v_graph_node_num != g_node_num:
-            # if v_graph_node_num < 1000:
-            #     for j in range(g_node_num):
-            #         if str(j) not in v_graph.id2name:
-            #             print(j)
-            raise ValueError(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl")
+            raise ValueError(f"\tMismatching number of nodes: {v_graph_node_num} in graphvite != {g_node_num} in dgl.")
 
         # print(f"\tNumber of nodes: {g_node_num}")
 
@@ -189,8 +201,8 @@ class CNFDatasetNode2Vec(Dataset):
         # Train Node2Vec hidden data
         embed = vite_solver.GraphSolver(dim=self.hidden_features_dim)
         embed.build(v_graph)
-        embed.train(model=self.hidden_features_type, num_epoch=2000, resume=False, augmentation_step=1, random_walk_length=40,
-                    random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
+        embed.train(model=self.hidden_features_type, num_epoch=2000, resume=False, augmentation_step=1,
+                    random_walk_length=40, random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
                     negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
 
         # Extract embedded feature data
@@ -256,15 +268,20 @@ class CNFDatasetNode2Vec(Dataset):
 
     def __getitem__(self, item):
         i = self.indices[item]
-
+        
         # Unpickle graph and feature data
         graph = self.load_pickled_graph(i)
-        features = self.load_pickled_features(i)
-
-        # Check if we need to re-pickle feature data (if nan had occurred during previous pickling)
-        while np.any(np.isnan(features)):
-            self.create_node2vec_features(i)
+        
+        degrees = False
+        if degrees:
+            features = graph.out_degrees().reshape((-1, 1))
+        else:
             features = self.load_pickled_features(i)
+
+            # Check if we need to re-pickle feature data (if nan had occurred during previous pickling)
+            while np.any(np.isnan(features)):
+                self.create_node2vec_features(i)
+                features = self.load_pickled_features(i)
 
         graph.ndata['features'] = features
 
