@@ -10,6 +10,15 @@
 namespace MasterThesis
 {
 
+void EdgelistGraph::Resize(const unsigned num_of_nodes)
+{
+    Graph::Resize(num_of_nodes);
+    for (auto i = 0u; i < _nodes.size(); ++i)
+    {
+        _nodes[i]->Neighbours().insert(std::move(i));
+    }
+}
+
 void EdgelistGraph::SaveToFile(const std::string & base_dir, const std::string & file_name)
 {
     using namespace std::string_literals;
