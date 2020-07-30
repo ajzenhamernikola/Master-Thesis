@@ -219,13 +219,13 @@ def train(train_device, test_device):
     # Model params
     input_dim = trainset.hidden_features_dim
     output_dim = 31
-    hidden_layers = [64, 64, 64, 64]
+    hidden_layers = [64, 64, 64]
     activation = "relu"
     activation_params = {}
     dropout_p = 0.0
     pooling = "avg"
     # Optimizer params
-    lr = 2e-5
+    lr = 1e-4
     w_decay = 0
     loss = "mse"
     # Num of epochs
