@@ -1,7 +1,7 @@
 import os 
 import pandas as pd 
 
-from utils.cnf.instance import \
+from ..cnf.instance import \
     filter_zipped_data_by_max_vars_and_clauses
 
 

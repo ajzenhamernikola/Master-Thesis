@@ -1,22 +1,24 @@
 import os
+import sys
 from copy import deepcopy
 
 import pandas as pd
 import numpy as np
 
-from utils.cnf.instance import \
+from .utils.cnf.instance import \
     collect_cnf_files_and_sizes, \
     calculate_numbers_of_variables_and_clauses, \
     print_number_of_instances_per_category, \
     generate_satzilla_features, \
-    generate_edgelist_formats
-from utils.cnf.plot import \
+    generate_edgelist_formats, \
+    generate_dgcnn_formats
+from .utils.cnf.plot import \
     plot_filesizes, \
     plot_variables_and_clauses_distrubutions, \
     plot_variables_and_clauses_distrubutions_with_limit
-from utils.csv.dataframe import \
+from .utils.csv.dataframe import \
     save_cnf_zipped_data_to_csv
-from utils.os.process import \
+from .utils.os.process import \
     cmd_args
 
 
@@ -26,6 +28,8 @@ def main():
     this_directory = os.path.abspath(os.getcwd())
     if cmd_args.wd != '':
         this_directory = os.path.abspath(cmd_args.wd)
+    print(f"This directory: {this_directory}")
+    sys.path.append(this_directory)
 
     if cmd_args.printCategories or cmd_args.plotFilesizes or cmd_args.plotFilteredData:
         print(bar)
@@ -80,6 +84,12 @@ def main():
         print(bar)
         print('Generating edgelist formats...')
         generate_edgelist_formats('./chosen_data/splits.csv', this_directory)
+
+    if cmd_args.dgcnn:
+        print(bar)
+        print('Generating DGCNN formats...')
+        generate_dgcnn_formats('./chosen_data/splits.csv', "./chosen_data/all_data_y.csv", this_directory,
+                               os.path.join(this_directory, "..", "src", "models", "DGCNN_SRC", "data"))
 
     print(bar)
 

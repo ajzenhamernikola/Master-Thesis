@@ -1,13 +1,14 @@
 import os
 import pandas as pd
+import numpy as np
 
-from utils.os.path import \
+from ..os.path import \
     collect_files_and_sizes
-from utils.os.process import \
+from ..os.process import \
     start_process
-from utils.csv.series import \
+from ..csv.series import \
     get_column_without_duplicates
-from utils.parsers.libparsers import \
+from ..parsers.libparsers import \
     PARSERSLIB
 
 
@@ -100,3 +101,68 @@ def generate_edgelist_formats(csv_filename, directory='.'):
         basedir = os.path.dirname(filename)
         filepath = os.path.basename(filename)
         PARSERSLIB.parse_dimacs_to_edgelist(basedir, filepath)
+
+
+def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_directory="."):
+    def log10_transform_data(data):
+        minimum_log10_value = 0.001
+        data[data < minimum_log10_value] = minimum_log10_value
+        return np.log10(data)
+
+    def sort_by_split(column: pd.Series):
+        result = []
+        for val in column.values:
+            if val == "Train":
+                result.append(1)
+            if val == "Validation":
+                result.append(2)
+            if val == "Test":
+                result.append(3)
+            if val == "None":
+                result.append(4)
+        return pd.Series(result)
+
+    data = pd.read_csv(os.path.join(directory, csv_filename)).sort_values(by="split", key=sort_by_split)
+    ys = pd.read_csv(os.path.join(directory, csv_labels))
+    features_filenames = []
+    splits = {}
+    test_ys = []
+    for i in range(len(data)):
+        split = data.iloc[i]['split']
+        if split not in splits:
+            splits[split] = 0
+        splits[split] += 1
+
+        if split == "None":
+            continue
+
+        instance_id = data.iloc[i]['instance_id']
+        labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0])
+        if split == "Test":
+            test_ys.append(labels)
+
+        filename = os.path.join(os.path.abspath(directory), instance_id)
+        features_filename = filename + '.dgcnn.txt'
+        features_filenames.append(features_filename)
+        if os.path.exists(features_filename):
+            continue
+
+        print('\nCreating DGCNN format for file #{0}: {1}...'.format(i + 1, filename))
+        basedir = os.path.dirname(filename)
+        filepath = os.path.basename(filename)
+        PARSERSLIB.parse_dimacs_to_dgcnn_vcg(basedir, filepath, " ".join([str(l) for l in labels]))
+
+    print(f"Found:\n\t{splits['Train']} in Train\n\t{splits['Validation']} in Validation\n\t{splits['Test']} in Test" +
+          f"\n\t{splits['None']} in None")
+
+    output_directory = os.path.join(output_directory, "CNF")
+    os.makedirs(output_directory, exist_ok=True)
+
+    data_file = os.path.join(output_directory, "CNF.txt")
+    np.savetxt(os.path.join(output_directory, "test_ytrue.txt"), np.array(test_ys, dtype=np.float32))
+
+    with open(data_file, "w") as data_file:
+        data_file.write(str(len(features_filenames)) + "\n")
+        for features_filename in features_filenames:
+            with open(features_filename, "r") as file:
+                data_file.write(file.read())

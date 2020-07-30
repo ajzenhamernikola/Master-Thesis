@@ -7,10 +7,10 @@
 #include <filesystem>
 
 #include "libparsers.hpp"
-#include "dcgnn_graph.hpp"
+#include "dgcnngraph.hpp"
 #include "edgelist_graph.hpp"
 
-int parse_dimacs_to_dcgnn_vcg(const char base_dir[256], const char file_name[256], const unsigned label)
+int parse_dimacs_to_dgcnn_vcg(const char base_dir[256], const char file_name[256], const char labels[256])
 {
     using namespace std::string_literals;
     using namespace MasterThesis;
@@ -32,7 +32,7 @@ int parse_dimacs_to_dcgnn_vcg(const char base_dir[256], const char file_name[256
 
     std::cout << "Parsing file: " << file_path << std::endl;
 
-    auto vcg = std::make_shared<DcgnnGraph>(label);
+    auto vcg = std::make_shared<DGCNNGraph>(labels);
     unsigned num_of_vars;
     unsigned num_of_clauses;
 
@@ -92,8 +92,8 @@ int parse_dimacs_to_dcgnn_vcg(const char base_dir[256], const char file_name[256
         vcg->SetTagForNode(negative_var_idx, "-1");
     }
 
-    const auto output_dir = std::string{base_dir} + "/parsed/"s;
-    const auto output_file = std::string{file_name} + ".dcgnn.txt"s;
+    const auto output_dir = std::string{base_dir};
+    const auto output_file = std::string{file_name} + ".dgcnn.txt"s;
     vcg->SaveToFile(output_dir, output_file);
     return 0;
 }

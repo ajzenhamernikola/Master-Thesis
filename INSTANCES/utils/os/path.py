@@ -1,6 +1,6 @@
 import os 
 
-from utils.alg import process_two_arrays
+from ..alg import process_two_arrays
 
 
 def collect_roots_from_two_arrays(arr1, arr2):

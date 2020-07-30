@@ -2,6 +2,7 @@
 #define DCGNN_MATRIX_HPP
 
 #include <string>
+#include <vector>
 
 #include "graph.hpp"
 #include "dcgnn_node.hpp"
@@ -9,13 +10,13 @@
 namespace MasterThesis
 {
 
-class DcgnnGraph : public Graph
+class DGCNNGraph : public Graph
 {
 private:
-    unsigned _label;
+    std::vector<std::string> _labels;
 
 public:
-    DcgnnGraph(const unsigned label);
+    DGCNNGraph(const char *labels);
 
     void Resize(const unsigned num_of_nodes) override;
     void SaveToFile(const std::string & base_dir, const std::string & file_name) override;

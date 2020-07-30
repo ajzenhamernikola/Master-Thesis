@@ -1,9 +1,9 @@
 import os 
 
-from utils.visualisation.lines import \
+from ..visualisation.lines import \
     plot_zip, \
     plot_zip_two_data
-from utils.cnf.instance import \
+from ..cnf.instance import \
     filter_zipped_data_by_max_vars_and_clauses
 
 
