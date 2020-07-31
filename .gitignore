@@ -18,6 +18,7 @@ INSTANCES/SAT_RACE2006/
 INSTANCES/SAT_RACE2008/
 INSTANCES/chosen_data/
 INSTANCES/figures/
+INSTANCES/dgcnn_data/
 dgcnn_predictions/
 
 CNF_acc_results.txt

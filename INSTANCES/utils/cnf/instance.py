@@ -1,4 +1,5 @@
 import os
+import pickle as pkl
 import pandas as pd
 import numpy as np
 
@@ -125,6 +126,7 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
     data = pd.read_csv(os.path.join(directory, csv_filename)).sort_values(by="split", key=sort_by_split)
     ys = pd.read_csv(os.path.join(directory, csv_labels))
     features_filenames = []
+    instance_ids = []
     splits = {}
     test_ys = []
     for i in range(len(data)):
@@ -137,6 +139,7 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
             continue
 
         instance_id = data.iloc[i]['instance_id']
+        instance_ids.append(instance_id)
         labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0])
         if split == "Test":
             test_ys.append(labels)
@@ -158,11 +161,9 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
     output_directory = os.path.join(output_directory, "CNF")
     os.makedirs(output_directory, exist_ok=True)
 
-    data_file = os.path.join(output_directory, "CNF.txt")
+    # Saving true labels
     np.savetxt(os.path.join(output_directory, "test_ytrue.txt"), np.array(test_ys, dtype=np.float32))
-
-    with open(data_file, "w") as data_file:
-        data_file.write(str(len(features_filenames)) + "\n")
-        for features_filename in features_filenames:
-            with open(features_filename, "r") as file:
-                data_file.write(file.read())
+    # Saving parsed instance ids
+    instance_ids_file = os.path.join(output_directory, "instance_ids.pickled")
+    with open(instance_ids_file, "wb") as instance_ids_file:
+        pkl.dump([instance_ids, splits], instance_ids_file)

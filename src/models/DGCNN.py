@@ -3,6 +3,9 @@ from __future__ import absolute_import
 import math
 import random
 import sys
+import os
+import pickle as pkl
+from time import localtime
 
 import numpy as np
 import pandas as pd
@@ -139,6 +142,11 @@ class Classifier(nn.Module):
         return embed, labels
 
 
+def localtime_to_str(t):
+    return f"{t.tm_hour}:{0 if t.tm_min < 10 else ''}{t.tm_min}:{0 if t.tm_sec < 10 else ''}{t.tm_sec} " + \
+           f"{t.tm_mday}.{t.tm_mon}.{t.tm_year}."
+
+
 def loop_dataset(epoch, g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_args.batch_size, dataset_type="train"):
     total_loss = []
     total_iters = (len(sample_idxes) + (bsize - 1) * (optimizer is None)) // bsize
@@ -156,7 +164,6 @@ def loop_dataset(epoch, g_list, classifier, sample_idxes, optimizer=None, bsize=
         if classifier.regression:
             pred, mae, loss = classifier(batch_graph)
             predicted = pred.cpu().detach()
-            print(predicted)
             all_scores.append(predicted)  # for binary classification
         else:
             logits, loss, acc = classifier(batch_graph)
@@ -201,7 +208,16 @@ def train_test():
     np.random.seed(cmd_args.seed)
     torch.manual_seed(cmd_args.seed)
 
-    train_graphs, test_graphs = load_data()
+    data_dir = os.path.join(".", "INSTANCES", "dgcnn_data")
+    instance_ids_filename = os.path.join(data_dir, cmd_args.data, "instance_ids.pickled")
+    with open(instance_ids_filename, "rb") as f:
+        instances_metadata = pkl.load(f)
+        instance_ids = instances_metadata[0]
+        splits = instances_metadata[1]
+
+    cmd_args.test_number = splits["Test"]
+
+    train_graphs, test_graphs = load_data(data_dir, instance_ids)
     print('# train: %d, # test: %d' % (len(train_graphs), len(test_graphs)))
 
     if cmd_args.sortpooling_k <= 1:

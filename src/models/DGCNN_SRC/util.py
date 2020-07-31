@@ -1,13 +1,11 @@
-from __future__ import print_function
-import numpy as np
-import random
-from tqdm import tqdm
-import os
-# import cPickle as cp
-# import _pickle as cp  # python3 compatability
-import networkx as nx
-import pdb
 import argparse
+import os
+import pickle as pkl
+from timeit import default_timer as timer
+
+import networkx as nx
+import numpy as np
+from tqdm import tqdm
 
 cmd_opt = argparse.ArgumentParser(description='Argparser for graph_classification')
 cmd_opt.add_argument('-mode', default='cpu', help='cpu/gpu')
@@ -82,14 +80,35 @@ class GNNGraph(object):
             self.edge_features = np.concatenate(self.edge_features, 0)
 
 
-def load_data():
-    print('loading data')
+def load_data(data_dir: str, instance_ids: list):
+    print('Loading data')
+
+    time_start = timer()
+
+    n_g = len(instance_ids)
+    pbar = tqdm(range(n_g), unit='graph')
     g_list = []
     feat_dict = {}
+    pickle_directory = os.path.join(data_dir, cmd_args.data, "pickled_data")
+    dgcnn_graphs_directory = os.path.join(data_dir, "..")
+    metadata_filename = os.path.join(pickle_directory, ".parsed_metadata")
 
-    with open(os.path.dirname(__file__) + '/data/%s/%s.txt' % (cmd_args.data, cmd_args.data), 'r') as f:
-        n_g = int(f.readline().strip())
-        for i in range(n_g):
+    for i in pbar:
+        pbar.set_description(f"Loading graph instance #{i} of {n_g}")
+        instance_id = instance_ids[i]
+
+        # Check if a graph is already pickled
+        pickle_file = os.path.join(pickle_directory, instance_id + ".dgcnn.pickled")
+        os.makedirs(os.path.dirname(pickle_file), exist_ok=True)
+
+        if os.path.exists(pickle_file):
+            with open(pickle_file, "rb") as pickle_f:
+                gnn_graph = pkl.load(pickle_f)
+                g_list.append(gnn_graph)
+                continue
+
+        graph_filename = os.path.join(dgcnn_graphs_directory, instance_id + ".dgcnn.txt")
+        with open(graph_filename, "r") as f:
             l = []
             n = 0
             row = f.readline().strip().split()
@@ -133,7 +152,24 @@ def load_data():
 
             # assert len(g.edges()) * 2 == n_edges  (some graphs in COLLAB have self-loops, ignored here)
             assert len(g) == n
-            g_list.append(GNNGraph(g, l, node_tags, node_features))
+            gnn_graph = GNNGraph(g, l, node_tags, node_features)
+            g_list.append(gnn_graph)
+
+            # Pickle the graph for next loading
+            with open(pickle_file, "wb") as pickle_f:
+                pkl.dump(gnn_graph, pickle_f)
+
+            # Pickle the current version of metadata
+            with open(metadata_filename, "wb") as meta_f:
+                metadata = [feat_dict, node_feature_flag, node_features]
+                pkl.dump(metadata, meta_f)
+
+    # Load the metadata
+    with open(metadata_filename, "rb") as meta_f:
+        metadata = pkl.load(meta_f)
+        feat_dict = metadata[0]
+        node_feature_flag = metadata[1]
+        node_features = metadata[2]
 
     cmd_args.num_class = len(g_list[0].labels)
     cmd_args.feat_dim = len(feat_dict)  # maximum node label (tag)
@@ -145,6 +181,9 @@ def load_data():
 
     print('# classes: %d' % cmd_args.num_class)
     print('# maximum node tag: %d' % cmd_args.feat_dim)
+
+    time_elapsed = timer() - time_start
+    print(f"Datasets loaded in {time_elapsed:.2f}s")
 
     if cmd_args.test_number == 0:
         train_idxes = np.loadtxt(os.path.dirname(__file__) + '/data/%s/10fold_idx/train_idx-%d.txt' % (cmd_args.data, cmd_args.fold),

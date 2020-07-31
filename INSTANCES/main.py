@@ -89,7 +89,7 @@ def main():
         print(bar)
         print('Generating DGCNN formats...')
         generate_dgcnn_formats('./chosen_data/splits.csv', "./chosen_data/all_data_y.csv", this_directory,
-                               os.path.join(this_directory, "..", "src", "models", "DGCNN_SRC", "data"))
+                               os.path.join(this_directory, "dgcnn_data"))
 
     print(bar)
 
