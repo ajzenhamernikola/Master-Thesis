@@ -333,7 +333,7 @@ class DGCNNPredictor(object):
 
         # Retrain the model on train + validation data
         train_validation_idxes = list(range(self.splits["Train"] + self.splits["Validation"]))
-        for epoch in range(cmd_args.num_epochs):
+        for epoch in range(best_epoch+1):
             # Train one epoch
             random.shuffle(train_validation_idxes)
             self.predictor.train()
@@ -357,6 +357,8 @@ class DGCNNPredictor(object):
 
             # Remember the last fully trained predictor
             self.last_trained_predictor = self.predictor
+            
+            gc.collect()
 
         if cmd_args.extract_features:
             train_val_graphs = load_next_batch(self.data_dir,
