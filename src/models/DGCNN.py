@@ -1,8 +1,8 @@
-import gc
 import random
 import sys
 import os
 import pickle as pkl
+import gc
 
 import numpy as np
 import pandas as pd
@@ -217,7 +217,6 @@ class DGCNNPredictor(object):
     def __init__(self):
         # Inits
         self.predictor = None
-        self.last_trained_predictor = None
         self.model_filename = "models/DGCNN/best_DGCNN_model"
 
         self.data_dir = os.path.join(".", "INSTANCES")
@@ -263,7 +262,6 @@ class DGCNNPredictor(object):
         val_losses = {"mse": [], "mae": []}
 
         loss_for_early_stopping = "mse"
-        look_behind = 20
         for epoch in range(cmd_args.num_epochs):
             # Train one epoch
             random.shuffle(train_idxes)
@@ -310,9 +308,6 @@ class DGCNNPredictor(object):
                 print('\033[92m  Average validation of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
                     epoch, val_loss[0], val_loss[1], val_loss[2]))
 
-            # Remember the last fully trained predictor
-            self.last_trained_predictor = self.predictor
-
             # Get the current loss for early stopping
             curr_loss = val_losses[loss_for_early_stopping][-1]
 
@@ -321,7 +316,7 @@ class DGCNNPredictor(object):
                 best_epoch = epoch
                 best_loss = curr_loss
 
-            if time_for_early_stopping(val_losses[loss_for_early_stopping], look_behind):
+            if time_for_early_stopping(val_losses[loss_for_early_stopping]):
                 print("Training stopped due to low progress in validation loss!\n")
                 break
 
@@ -355,9 +350,6 @@ class DGCNNPredictor(object):
                 print('\033[92m  Average training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
                       epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
 
-            # Remember the last fully trained predictor
-            self.last_trained_predictor = self.predictor
-            
             gc.collect()
 
         if cmd_args.extract_features:
@@ -418,10 +410,6 @@ class DGCNNPredictor(object):
             labels = labels.type('torch.FloatTensor')
             np.savetxt('models/DGCNN/extracted_features_test.txt',
                        torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
-
-    def __del__(self):
-        # In case a problem arises, serialize the last known fully trained predictor
-        torch.save(self.last_trained_predictor, self.model_filename)
 
 
 def main():

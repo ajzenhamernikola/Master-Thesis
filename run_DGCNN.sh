@@ -8,7 +8,7 @@ fold=${2-1}  # which fold as testing data
 gm=DGCNN  # model
 gpu_or_cpu=cpu
 GPU=0  # select the GPU number
-CONV_SIZE="32-32-32-31"
+CONV_SIZE="64-32-32-32"
 sortpooling_k=0.6  # If k <= 1, then k is set to an integer so that k% of graphs have nodes less than this integer
 FP_LEN=0  # final dense layer's input dimension, decided by data
 n_hidden=128  # final dense layer's hidden size
@@ -17,6 +17,7 @@ dropout=True
 
 # dataset-specific settings
 num_epochs=100
+look_behind=30
 learning_rate=0.0001
 
 CODE=134

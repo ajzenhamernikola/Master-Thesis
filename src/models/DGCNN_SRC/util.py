@@ -3,6 +3,7 @@ import os
 import pickle as pkl
 from timeit import default_timer as timer
 import math
+import gc
 
 import networkx as nx
 import numpy as np
@@ -16,6 +17,7 @@ cmd_opt.add_argument('-mode', default='cpu', help='cpu/gpu')
 cmd_opt.add_argument('-gm', default='DGCNN', help='gnn model to use')
 cmd_opt.add_argument('-data', default=None, help='data folder name')
 cmd_opt.add_argument('-batch_size', type=int, default=50, help='minibatch size')
+cmd_opt.add_argument('-look_behind', type=int, default=50, help='number of epochs to train before early stopping check')
 cmd_opt.add_argument('-seed', type=int, default=1, help='seed')
 cmd_opt.add_argument('-feat_dim', type=int, default=0, help='dimension of discrete node feature (maximum node tag)')
 cmd_opt.add_argument('-edge_feat_dim', type=int, default=0, help='dimension of edge features')
@@ -278,6 +280,9 @@ def loop_dataset(data_dir, instance_ids, splits, epoch, classifier, sample_idxes
             optimizer.step()
 
         loss = loss.data.cpu().detach().numpy()
+        
+        del batch_graph
+        
         if classifier.regression:
             pbar.set_description('MSE_loss: %0.5f MAE_loss: %0.5f' % (loss, mae))
             total_loss.append(np.array([loss, mae]) * len(selected_idx))
@@ -286,8 +291,11 @@ def loop_dataset(data_dir, instance_ids, splits, epoch, classifier, sample_idxes
             total_loss.append(np.array([loss, acc]) * len(selected_idx))
 
         n_samples += len(selected_idx)
+        gc.collect()
+        
     if optimizer is None:
         assert n_samples == len(sample_idxes)
+        
     total_loss = np.array(total_loss)
     avg_loss = np.sum(total_loss, 0) / n_samples
     all_scores = torch.cat(all_scores).cpu().numpy()
@@ -301,16 +309,19 @@ def loop_dataset(data_dir, instance_ids, splits, epoch, classifier, sample_idxes
         avg_loss = np.concatenate((avg_loss, [auc]))
     else:
         avg_loss = np.concatenate((avg_loss, [0.0]))
+        
+    del all_targets
+    gc.collect()
 
     return avg_loss
 
 
-def time_for_early_stopping(val_losses: list, look_behind: int):
-    if len(val_losses) < look_behind:
+def time_for_early_stopping(val_losses: list):
+    if len(val_losses) < cmd_args.look_behind:
         return False
 
     last_epoch_loss = val_losses[-1]
-    avg_epoch_loss = np.average(val_losses[-look_behind:])
+    avg_epoch_loss = np.average(val_losses[-cmd_args.look_behind:])
 
-    # Stop training if the progress in last epoch is less than 7.5% of average losses
-    return avg_epoch_loss - last_epoch_loss < 0.075 * avg_epoch_loss
+    # Stop training if the progress in last epoch is less than 5% of average losses
+    return avg_epoch_loss - last_epoch_loss < 0.05 * avg_epoch_loss
