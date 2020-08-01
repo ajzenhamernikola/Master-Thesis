@@ -1,3 +1,0 @@
-*.cnf filter=lfs diff=lfs merge=lfs -text
-*.edgelist filter=lfs diff=lfs merge=lfs -text
-models/best_rf_model filter=lfs diff=lfs merge=lfs -text
