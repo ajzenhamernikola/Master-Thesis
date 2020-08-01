@@ -78,18 +78,21 @@ def main():
     if cmd_args.satzilla:
         print(bar)
         print('Generating SATzilla2012 features...')
-        generate_satzilla_features('./chosen_data/splits.csv')
+        generate_satzilla_features(os.path.join(this_directory, './chosen_data/splits.csv'))
 
     if cmd_args.edgelist:
         print(bar)
         print('Generating edgelist formats...')
-        generate_edgelist_formats('./chosen_data/splits.csv', this_directory)
+        generate_edgelist_formats(os.path.join(this_directory, './chosen_data/splits.csv'),
+                                  this_directory)
 
     if cmd_args.dgcnn:
         print(bar)
         print('Generating DGCNN formats...')
-        generate_dgcnn_formats('./chosen_data/splits.csv', "./chosen_data/all_data_y.csv", this_directory,
-                               os.path.join(this_directory, "dgcnn_data"))
+        generate_dgcnn_formats(os.path.join(this_directory, './chosen_data/splits.csv'),
+                               os.path.join(this_directory, "./chosen_data/all_data_y.csv"),
+                               this_directory,
+                               os.path.join(this_directory, "DGCNN"))
 
     print(bar)
 

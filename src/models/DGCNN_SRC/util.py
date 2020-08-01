@@ -2,10 +2,14 @@ import argparse
 import os
 import pickle as pkl
 from timeit import default_timer as timer
+import math
 
 import networkx as nx
 import numpy as np
+import torch
+from sklearn import metrics
 from tqdm import tqdm
+import graphvite
 
 cmd_opt = argparse.ArgumentParser(description='Argparser for graph_classification')
 cmd_opt.add_argument('-mode', default='cpu', help='cpu/gpu')
@@ -80,35 +84,73 @@ class GNNGraph(object):
             self.edge_features = np.concatenate(self.edge_features, 0)
 
 
-def load_data(data_dir: str, instance_ids: list):
-    print('Loading data')
+def create_node2vec_features(data_dir: str, instance_id: str):
+    edgelist_filename = os.path.join(data_dir, instance_id + '.edgelist')
+
+    # Prepare graph for Node2Vec
+    v_graph = graphvite.graph.Graph()
+    v_graph.load(edgelist_filename, as_undirected=False)
+
+    # Train Node2Vec hidden data
+    embed = graphvite.solver.GraphSolver(dim=64)
+    embed.build(v_graph)
+    embed.train(model="node2vec", num_epoch=2000, resume=False, augmentation_step=1,
+                random_walk_length=40, random_walk_batch_size=100, shuffle_base=1, p=1, q=1, positive_reuse=1,
+                negative_sample_exponent=0.75, negative_weight=5, log_frequency=1000)
+
+    # Extract embedded feature data
+    sorted_features = np.empty(embed.vertex_embeddings.shape, dtype=np.float32)
+    id2name = list(map(lambda x: int(x), v_graph.id2name))
+    try:
+        for j in range(embed.vertex_embeddings.shape[0]):
+            sorted_features[id2name[j], :] = embed.vertex_embeddings[j]
+    except IndexError as e:
+        print(embed.vertex_embeddings.shape)
+        print(sorted_features.shape)
+        print(e)
+        exit(1)
+
+    # Clear memory and data on CPU and GPU
+    embed.clear()
+
+    # Pickle hidden feature data
+    pickled_filename = os.path.join(data_dir, "..", "data", instance_id + '.node2vec64')
+    np.save(pickled_filename, sorted_features)
+
+
+def pickle_data(data_dir: str, instance_ids: list, splits: dict):
+    print('Pickling data')
 
     time_start = timer()
 
     n_g = len(instance_ids)
     pbar = tqdm(range(n_g), unit='graph')
-    g_list = []
-    feat_dict = {}
-    pickle_directory = os.path.join(data_dir, cmd_args.data, "pickled_data")
-    dgcnn_graphs_directory = os.path.join(data_dir, "..")
-    metadata_filename = os.path.join(pickle_directory, ".parsed_metadata")
+    metadata_filename = os.path.join(data_dir, "DGCNN", "dgcnn_parsing_metadata.pickled")
+    os.makedirs(os.path.dirname(metadata_filename), exist_ok=True)
+
+    if os.path.exists(metadata_filename):
+        with open(metadata_filename, "rb") as meta_f:
+            metadata = pkl.load(meta_f)
+            feat_dict = metadata[0]
+            num_nodes_l = metadata[2]
+    else:
+        feat_dict = {}
+        num_nodes_l = []
 
     for i in pbar:
         pbar.set_description(f"Loading graph instance #{i} of {n_g}")
         instance_id = instance_ids[i]
 
         # Check if a graph is already pickled
-        pickle_file = os.path.join(pickle_directory, instance_id + ".dgcnn.pickled")
+        pickle_file = os.path.join(data_dir, instance_id + ".dgcnn.pickled")
         os.makedirs(os.path.dirname(pickle_file), exist_ok=True)
 
         if os.path.exists(pickle_file):
-            with open(pickle_file, "rb") as pickle_f:
-                gnn_graph = pkl.load(pickle_f)
-                g_list.append(gnn_graph)
-                continue
+            continue
 
-        graph_filename = os.path.join(dgcnn_graphs_directory, instance_id + ".dgcnn.txt")
+        graph_filename = os.path.join(data_dir, instance_id + ".dgcnn.txt")
         with open(graph_filename, "r") as f:
+            # Load graph data
             l = []
             n = 0
             row = f.readline().strip().split()
@@ -119,41 +161,32 @@ def load_data(data_dir: str, instance_ids: list):
                     l.append(np.float(data))
             g = nx.Graph()
             node_tags = []
-            node_features = []
             n_edges = 0
             for j in range(n):
                 g.add_node(j)
                 row = f.readline().strip().split()
-                tmp = int(row[1]) + 2
-                if tmp == len(row):
-                    # no node attributes
-                    row = [int(w) for w in row]
-                    attr = None
-                else:
-                    row, attr = [int(w) for w in row[:tmp]], np.array([float(w) for w in row[tmp:]])
+                row = [np.int32(w) for w in row]
+
                 if not row[0] in feat_dict:
                     mapped = len(feat_dict)
                     feat_dict[row[0]] = mapped
                 node_tags.append(feat_dict[row[0]])
 
-                if attr is not None:
-                    node_features.append(attr)
-
                 n_edges += row[1]
                 for k in range(2, len(row)):
                     g.add_edge(j, row[k])
 
-            if node_features:
-                node_features = np.stack(node_features)
-                node_feature_flag = True
-            else:
-                node_features = None
-                node_feature_flag = False
-
-            # assert len(g.edges()) * 2 == n_edges  (some graphs in COLLAB have self-loops, ignored here)
             assert len(g) == n
+
+            # Load feature data
+            features_filename = os.path.join(data_dir, "..", "data", instance_id + '.node2vec64.npy')
+            if not os.path.exists(features_filename):
+                create_node2vec_features(data_dir, instance_id)
+            node_features = np.load(features_filename)
+
+            # Create the graph
             gnn_graph = GNNGraph(g, l, node_tags, node_features)
-            g_list.append(gnn_graph)
+            num_nodes_l.append(gnn_graph.num_nodes)
 
             # Pickle the graph for next loading
             with open(pickle_file, "wb") as pickle_f:
@@ -161,35 +194,123 @@ def load_data(data_dir: str, instance_ids: list):
 
             # Pickle the current version of metadata
             with open(metadata_filename, "wb") as meta_f:
-                metadata = [feat_dict, node_feature_flag, node_features]
+                metadata = [feat_dict, len(l), num_nodes_l]
                 pkl.dump(metadata, meta_f)
 
     # Load the metadata
     with open(metadata_filename, "rb") as meta_f:
         metadata = pkl.load(meta_f)
         feat_dict = metadata[0]
-        node_feature_flag = metadata[1]
-        node_features = metadata[2]
+        num_class = metadata[1]
+        num_nodes_l = metadata[2]
 
-    cmd_args.num_class = len(g_list[0].labels)
-    cmd_args.feat_dim = len(feat_dict)  # maximum node label (tag)
-    cmd_args.edge_feat_dim = 0
-    if node_feature_flag:
-        cmd_args.attr_dim = node_features.shape[1]  # dim of node features (attributes)
-    else:
-        cmd_args.attr_dim = 0
+    time_elapsed = timer() - time_start
+    print(f"Data pickled in {time_elapsed:.2f}s\n")
+
+    print("Instances distribution:")
+    print(f"\tTrain: {splits['Train']}\n\tValidation: {splits['Validation']}\n\tTest: {splits['Test']}\n")
 
     print('# classes: %d' % cmd_args.num_class)
     print('# maximum node tag: %d' % cmd_args.feat_dim)
 
-    time_elapsed = timer() - time_start
-    print(f"Datasets loaded in {time_elapsed:.2f}s")
+    # Set data parameters
+    if cmd_args.sortpooling_k <= 1:
+        num_nodes_list = sorted(num_nodes_l)
+        cmd_args.sortpooling_k = num_nodes_list[int(math.ceil(cmd_args.sortpooling_k * len(num_nodes_list))) - 1]
+        cmd_args.sortpooling_k = max(10, cmd_args.sortpooling_k)
+    cmd_args.num_class = num_class
+    cmd_args.feat_dim = len(feat_dict)  # maximum node label (tag)
+    cmd_args.edge_feat_dim = 0
+    cmd_args.attr_dim = 64
+    print(f'K used in SortPooling is: {cmd_args.sortpooling_k}')
 
-    if cmd_args.test_number == 0:
-        train_idxes = np.loadtxt(os.path.dirname(__file__) + '/data/%s/10fold_idx/train_idx-%d.txt' % (cmd_args.data, cmd_args.fold),
-                                 dtype=np.int32).tolist()
-        test_idxes = np.loadtxt(os.path.dirname(__file__) + '/data/%s/10fold_idx/test_idx-%d.txt' % (cmd_args.data, cmd_args.fold),
-                                dtype=np.int32).tolist()
-        return [g_list[i] for i in train_idxes], [g_list[i] for i in test_idxes]
+
+def load_next_batch(data_dir, instance_ids, selected_idx, splits, dataset_type):
+    train_size = splits["Train"]
+    val_size = splits["Validation"]
+
+    if dataset_type == "Train":
+        instance_ids = instance_ids[:train_size]
+    elif dataset_type == "Validation":
+        instance_ids = instance_ids[train_size:train_size + val_size]
+    elif dataset_type == "Train+Validation":
+        instance_ids = instance_ids[:train_size + val_size]
+    elif dataset_type == "Test":
+        instance_ids = instance_ids[train_size + val_size:]
+
+    batch_graph = []
+    labels = []
+    for idx in selected_idx:
+        instance_id = instance_ids[idx]
+        pickle_file = os.path.join(data_dir, instance_id + ".dgcnn.pickled")
+        with open(pickle_file, "rb") as f:
+            batch_graph.append(pkl.load(f))
+            labels.append(batch_graph[-1].labels)
+
+    return batch_graph, labels
+
+
+def loop_dataset(data_dir, instance_ids, splits, epoch, classifier, sample_idxes, optimizer=None, bsize=cmd_args.batch_size, dataset_type="Train"):
+    total_loss = []
+    total_iters = (len(sample_idxes) + (bsize - 1) * (optimizer is None)) // bsize
+    pbar = tqdm(range(total_iters), unit='batch')
+    all_targets = []
+    all_scores = []
+
+    n_samples = 0
+    for pos in pbar:
+        selected_idx = sample_idxes[pos * bsize: (pos + 1) * bsize]
+
+        batch_graph, targets = load_next_batch(data_dir, instance_ids, selected_idx, splits, dataset_type)
+        all_targets += targets
+
+        if classifier.regression:
+            pred, mae, loss = classifier(batch_graph)
+            predicted = pred.cpu().detach()
+            all_scores.append(predicted)  # for binary classification
+        else:
+            logits, loss, acc = classifier(batch_graph)
+            all_scores.append(logits[:, 1].cpu().detach())  # for binary classification
+
+        if optimizer is not None:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        loss = loss.data.cpu().detach().numpy()
+        if classifier.regression:
+            pbar.set_description('MSE_loss: %0.5f MAE_loss: %0.5f' % (loss, mae))
+            total_loss.append(np.array([loss, mae]) * len(selected_idx))
+        else:
+            pbar.set_description('loss: %0.5f acc: %0.5f' % (loss, acc))
+            total_loss.append(np.array([loss, acc]) * len(selected_idx))
+
+        n_samples += len(selected_idx)
+    if optimizer is None:
+        assert n_samples == len(sample_idxes)
+    total_loss = np.array(total_loss)
+    avg_loss = np.sum(total_loss, 0) / n_samples
+    all_scores = torch.cat(all_scores).cpu().numpy()
+
+    np.savetxt(f'models/DGCNN/{dataset_type}_{epoch}_scores.txt', all_scores)  # output predictions
+
+    if not classifier.regression and cmd_args.printAUC:
+        all_targets = np.array(all_targets)
+        fpr, tpr, _ = metrics.roc_curve(all_targets, all_scores, pos_label=1)
+        auc = metrics.auc(fpr, tpr)
+        avg_loss = np.concatenate((avg_loss, [auc]))
     else:
-        return g_list[: n_g - cmd_args.test_number], g_list[n_g - cmd_args.test_number:]
+        avg_loss = np.concatenate((avg_loss, [0.0]))
+
+    return avg_loss
+
+
+def time_for_early_stopping(val_losses: list, look_behind: int):
+    if len(val_losses) < look_behind:
+        return False
+
+    last_epoch_loss = val_losses[-1]
+    avg_epoch_loss = np.average(val_losses[-look_behind:])
+
+    # Stop training if the progress in last epoch is less than 7.5% of average losses
+    return avg_epoch_loss - last_epoch_loss < 0.075 * avg_epoch_loss

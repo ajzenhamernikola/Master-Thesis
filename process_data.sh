@@ -6,7 +6,7 @@ PRINT_CATEGORIES=false
 PLOT_FILESIZES=false
 PLOT_FILTERED_DATA=false
 SATZILLA=false
-EDGELIST=false
+EDGELIST=true
 DGCNN=true
 
 # Run code

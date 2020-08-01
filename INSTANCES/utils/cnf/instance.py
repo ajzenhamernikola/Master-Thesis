@@ -123,6 +123,12 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
                 result.append(4)
         return pd.Series(result)
 
+    def is_unsolvable(data: pd.DataFrame, instance_id: str):
+        row = data[data["instance_id"] == instance_id].drop(columns="instance_id").values
+        return np.all(row == 1200.0)
+
+    all_data_y = pd.read_csv(os.path.join(directory, "chosen_data", "all_data_y.csv"))
+
     data = pd.read_csv(os.path.join(directory, csv_filename)).sort_values(by="split", key=sort_by_split)
     ys = pd.read_csv(os.path.join(directory, csv_labels))
     features_filenames = []
@@ -130,6 +136,10 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
     splits = {}
     test_ys = []
     for i in range(len(data)):
+        instance_id = data.iloc[i]['instance_id']
+        if is_unsolvable(all_data_y, instance_id):
+            continue
+
         split = data.iloc[i]['split']
         if split not in splits:
             splits[split] = 0
@@ -138,7 +148,6 @@ def generate_dgcnn_formats(csv_filename, csv_labels, directory='.', output_direc
         if split == "None":
             continue
 
-        instance_id = data.iloc[i]['instance_id']
         instance_ids.append(instance_id)
         labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0])
         if split == "Test":

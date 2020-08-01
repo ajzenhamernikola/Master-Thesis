@@ -1,11 +1,8 @@
-from __future__ import absolute_import
-
-import math
+import gc
 import random
 import sys
 import os
 import pickle as pkl
-from time import localtime
 
 import numpy as np
 import pandas as pd
@@ -14,16 +11,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn import metrics
-from tqdm import tqdm
 
 from .DGCNN_SRC.DGCNN_embedding import DGCNN
 from .DGCNN_SRC.mlp_dropout import MLPClassifier, MLPRegression
-from .DGCNN_SRC.util import cmd_args, load_data
+from .DGCNN_SRC.util import cmd_args, pickle_data, loop_dataset, load_next_batch, time_for_early_stopping
 
 
-class Classifier(nn.Module):
+class Predictor(nn.Module):
     def __init__(self, regression=False):
-        super(Classifier, self).__init__()
+        super(Predictor, self).__init__()
         self.regression = regression
         if cmd_args.gm == 'DGCNN':
             model = DGCNN
@@ -52,7 +48,7 @@ class Classifier(nn.Module):
             self.mlp = MLPClassifier(input_size=out_dim, hidden_size=cmd_args.hidden, num_class=cmd_args.num_class,
                                      with_dropout=cmd_args.dropout)
 
-    def PrepareFeatureLabel(self, batch_graph):
+    def prepare_feature_labels(self, batch_graph):
         if self.regression:
             labels = torch.FloatTensor(len(batch_graph), len(batch_graph[0].labels))
         else:
@@ -122,17 +118,11 @@ class Classifier(nn.Module):
         return node_feat, labels
 
     def forward(self, batch_graph):
-        feature_label = self.PrepareFeatureLabel(batch_graph)
-        if len(feature_label) == 2:
-            node_feat, labels = feature_label
-            edge_feat = None
-        elif len(feature_label) == 3:
-            node_feat, edge_feat, labels = feature_label
-        embed = self.gnn(batch_graph, node_feat, edge_feat)
+        embed, labels = self.output_features(batch_graph)
         return self.mlp(embed, labels)
 
     def output_features(self, batch_graph):
-        feature_label = self.PrepareFeatureLabel(batch_graph)
+        feature_label = self.prepare_feature_labels(batch_graph)
         if len(feature_label) == 2:
             node_feat, labels = feature_label
             edge_feat = None
@@ -142,169 +132,21 @@ class Classifier(nn.Module):
         return embed, labels
 
 
-def localtime_to_str(t):
-    return f"{t.tm_hour}:{0 if t.tm_min < 10 else ''}{t.tm_min}:{0 if t.tm_sec < 10 else ''}{t.tm_sec} " + \
-           f"{t.tm_mday}.{t.tm_mon}.{t.tm_year}."
-
-
-def loop_dataset(epoch, g_list, classifier, sample_idxes, optimizer=None, bsize=cmd_args.batch_size, dataset_type="train"):
-    total_loss = []
-    total_iters = (len(sample_idxes) + (bsize - 1) * (optimizer is None)) // bsize
-    pbar = tqdm(range(total_iters), unit='batch')
-    all_targets = []
-    all_scores = []
-
-    n_samples = 0
-    for pos in pbar:
-        selected_idx = sample_idxes[pos * bsize: (pos + 1) * bsize]
-
-        batch_graph = [g_list[idx] for idx in selected_idx]
-        targets = [g_list[idx].labels for idx in selected_idx]
-        all_targets += targets
-        if classifier.regression:
-            pred, mae, loss = classifier(batch_graph)
-            predicted = pred.cpu().detach()
-            all_scores.append(predicted)  # for binary classification
-        else:
-            logits, loss, acc = classifier(batch_graph)
-            all_scores.append(logits[:, 1].cpu().detach())  # for binary classification
-
-        if optimizer is not None:
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        loss = loss.data.cpu().detach().numpy()
-        if classifier.regression:
-            pbar.set_description('MSE_loss: %0.5f MAE_loss: %0.5f' % (loss, mae))
-            total_loss.append(np.array([loss, mae]) * len(selected_idx))
-        else:
-            pbar.set_description('loss: %0.5f acc: %0.5f' % (loss, acc))
-            total_loss.append(np.array([loss, acc]) * len(selected_idx))
-
-        n_samples += len(selected_idx)
-    if optimizer is None:
-        assert n_samples == len(sample_idxes)
-    total_loss = np.array(total_loss)
-    avg_loss = np.sum(total_loss, 0) / n_samples
-    all_scores = torch.cat(all_scores).cpu().numpy()
-
-    np.savetxt(f'dgcnn_predictions/{dataset_type}_{epoch}_scores.txt', all_scores)  # output predictions
-
-    if not classifier.regression and cmd_args.printAUC:
-        all_targets = np.array(all_targets)
-        fpr, tpr, _ = metrics.roc_curve(all_targets, all_scores, pos_label=1)
-        auc = metrics.auc(fpr, tpr)
-        avg_loss = np.concatenate((avg_loss, [auc]))
-    else:
-        avg_loss = np.concatenate((avg_loss, [0.0]))
-
-    return avg_loss
-
-
-def train_test():
-    print(cmd_args)
-    random.seed(cmd_args.seed)
-    np.random.seed(cmd_args.seed)
-    torch.manual_seed(cmd_args.seed)
-
-    data_dir = os.path.join(".", "INSTANCES", "dgcnn_data")
-    instance_ids_filename = os.path.join(data_dir, cmd_args.data, "instance_ids.pickled")
-    with open(instance_ids_filename, "rb") as f:
-        instances_metadata = pkl.load(f)
-        instance_ids = instances_metadata[0]
-        splits = instances_metadata[1]
-
-    cmd_args.test_number = splits["Test"]
-
-    train_graphs, test_graphs = load_data(data_dir, instance_ids)
-    print('# train: %d, # test: %d' % (len(train_graphs), len(test_graphs)))
-
-    if cmd_args.sortpooling_k <= 1:
-        num_nodes_list = sorted([g.num_nodes for g in train_graphs + test_graphs])
-        cmd_args.sortpooling_k = num_nodes_list[int(math.ceil(cmd_args.sortpooling_k * len(num_nodes_list))) - 1]
-        cmd_args.sortpooling_k = max(10, cmd_args.sortpooling_k)
-        print('k used in SortPooling is: ' + str(cmd_args.sortpooling_k))
-
-    classifier = Classifier(regression=True)
-    if cmd_args.mode == 'gpu':
-        classifier = classifier.cuda()
-
-    optimizer = optim.Adam(classifier.parameters(), lr=cmd_args.learning_rate)
-
-    train_idxes = list(range(len(train_graphs)))
-    best_loss = None
-    train_losses = {"mse": [], "mae": []}
-    test_losses = {"mse": [], "mae": []}
-    for epoch in range(cmd_args.num_epochs):
-        random.shuffle(train_idxes)
-        classifier.train()
-        avg_loss = loop_dataset(epoch, train_graphs, classifier, train_idxes, optimizer=optimizer, dataset_type="train")
-        if not cmd_args.printAUC:
-            avg_loss[2] = 0.0
-        if classifier.regression:
-            print('\033[92maverage training of epoch %d: loss %.5f mae %.5f\033[0m' % (
-                epoch, avg_loss[0], avg_loss[1]))
-            train_losses["mse"].append(avg_loss[0])
-            train_losses["mae"].append(avg_loss[1])
-        else:
-            print('\033[92maverage training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-                  epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
-
-        classifier.eval()
-        test_loss = loop_dataset(epoch, test_graphs, classifier, list(range(len(test_graphs))), dataset_type="test")
-        if not cmd_args.printAUC:
-            test_loss[2] = 0.0
-        if classifier.regression:
-            print('\033[92maverage test of epoch %d: loss %.5f mae %.5f\033[0m' % (
-                epoch, test_loss[0], test_loss[1]))
-            test_losses["mse"].append(test_loss[0])
-            test_losses["mae"].append(test_loss[1])
-        else:
-            print('\033[92maverage test of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
-                  epoch, test_loss[0], test_loss[1], test_loss[2]))
-
-    with open(cmd_args.data + '_acc_results.txt', 'a+') as f:
-        f.write(str(test_loss[1]) + '\n')
-
-    pd.DataFrame(train_losses).to_csv("dgcnn_train_losses.csv", index=False)
-    pd.DataFrame(test_losses).to_csv("dgcnn_test_losses.csv", index=False)
-
-    if cmd_args.printAUC:
-        with open(cmd_args.data + '_auc_results.txt', 'a+') as f:
-            f.write(str(test_loss[2]) + '\n')
-
-    if cmd_args.extract_features:
-        features, labels = classifier.output_features(train_graphs)
-        labels = labels.type('torch.FloatTensor')
-        np.savetxt('extracted_features_train.txt',
-                   torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
-        features, labels = classifier.output_features(test_graphs)
-        labels = labels.type('torch.FloatTensor')
-        np.savetxt('extracted_features_test.txt',
-                   torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
-
-    torch.save(classifier, "models/dgcnn")
-
-
-if __name__ == "__main__":
-    train_test()
-
-    # Plot losses
-    train_losses = pd.read_csv("dgcnn_train_losses.csv")
-    test_losses = pd.read_csv("dgcnn_test_losses.csv")
+def plot_losses():
+    train_losses = pd.read_csv("models/DGCNN/dgcnn_Train_losses.csv")
+    val_losses = pd.read_csv("models/DGCNN/dgcnn_Validation_losses.csv")
 
     fig, (top_ax, bot_ax) = plt.subplots(2)
-    fig.suptitle("Training/Test progress")
+    fig.suptitle("Training/Validation progress")
     fig.set_size_inches(w=len(train_losses) * 0.5, h=15)
 
-    top_ax.set_ylabel("Loss value")
-    top_ax.plot(range(len(train_losses["mse"])), train_losses["mse"], color="blue", linestyle="solid", label="mse")
-    top_ax.plot(range(len(train_losses["mae"])), train_losses["mae"], color="red", linestyle="solid", label="mae")
+    top_ax.set_ylabel("MSE loss value")
+    top_ax.plot(range(len(train_losses["mse"])), train_losses["mse"], color="blue", linestyle="solid", label="Train")
+    top_ax.plot(range(len(val_losses["mse"])), val_losses["mse"], color="magenta", linestyle="solid", label="Val")
 
-    bot_ax.set_ylabel("Loss value")
-    bot_ax.plot(range(len(test_losses["mse"])), test_losses["mse"], color="magenta", linestyle="solid", label="mse")
-    bot_ax.plot(range(len(test_losses["mae"])), test_losses["mae"], color="orange", linestyle="solid", label="mae")
+    bot_ax.set_ylabel("MAE loss value")
+    bot_ax.plot(range(len(train_losses["mae"])), train_losses["mae"], color="red", linestyle="solid", label="Train")
+    bot_ax.plot(range(len(val_losses["mae"])), val_losses["mae"], color="orange", linestyle="solid", label="Val")
 
     for ax in fig.get_axes():
         ax.set_xticks(range(len(train_losses)))
@@ -312,13 +154,14 @@ if __name__ == "__main__":
         ax.set_xlabel("Epoch #")
         ax.legend()
 
-    plt.savefig('dgcnn_predictions/graph_losses.png')
+    plt.savefig('models/DGCNN/graph_losses.png')
     plt.close()
 
+
+def plot_scores_per_solver():
     # Best model predictions
-    best_epoch = np.argmin(test_losses["mse"])
-    y_pred = np.loadtxt(f"dgcnn_predictions/test_{best_epoch}_scores.txt")
-    y_true = np.loadtxt(f"src/models/DGCNN_SRC/data/{cmd_args.data}/test_ytrue.txt")
+    y_pred = np.loadtxt(f"models/DGCNN/Test_0_scores.txt")
+    y_true = np.loadtxt(f"INSTANCES/DGCNN/{cmd_args.data}/test_ytrue.txt")
     number_of_solvers = y_pred.shape[1]
 
     # Plot scores per solver
@@ -333,7 +176,7 @@ if __name__ == "__main__":
 
     print(f"Average R2 score: {r2_score_test_avg}, Average RMSE score: {rmse_score_test_avg}")
 
-    png_file = 'dgcnn_predictions/graph_scores_per_solver.png'
+    png_file = 'models/DGCNN/graph_scores_per_solver.png'
     solver_names = ["ebglucose", "ebminisat", "glucose2", "glueminisat", "lingeling", "lrglshr", "minisatpsm",
                     "mphaseSAT64", "precosat", "qutersat", "rcl", "restartsat", "cryptominisat2011", "spear-sw",
                     "spear-hw", "eagleup", "sparrow", "marchrw", "mphaseSATm", "satime11", "tnm", "mxc09", "gnoveltyp2",
@@ -368,3 +211,229 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.savefig(png_file, dpi=300)
     plt.close()
+
+
+class DGCNNPredictor(object):
+    def __init__(self):
+        # Inits
+        self.predictor = None
+        self.last_trained_predictor = None
+        self.model_filename = "models/DGCNN/best_DGCNN_model"
+
+        self.data_dir = os.path.join(".", "INSTANCES")
+        instance_ids_filename = os.path.join(self.data_dir, "DGCNN", cmd_args.data, "instance_ids.pickled")
+        with open(instance_ids_filename, "rb") as f:
+            instances_metadata = pkl.load(f)
+            self.instance_ids = instances_metadata[0]
+            self.splits = instances_metadata[1]
+
+        pickle_data(self.data_dir, self.instance_ids, self.splits)
+
+    def train(self):
+        overwrite = True
+        if os.path.exists(self.model_filename):
+            print("\nModel already exist. Would you like to overwrite it [o], continue training [t], " +
+                  "or use existing [e]?")
+            response = input().lower()
+            if response == "e":
+                return
+            if response == "t":
+                overwrite = False
+            elif response != "o":
+                raise ValueError(f"You responded with '{response}', while the options are one of {{'o', 't', 'e'}}")
+
+        if overwrite:
+            self.predictor = Predictor(regression=True)
+        else:
+            self.predictor = torch.load(self.model_filename)
+
+        if cmd_args.mode == 'gpu':
+            self.predictor = self.predictor.cuda()
+            print("Optimizing on a GPU\n")
+        else:
+            print("Optimizing on a CPU\n")
+
+        optimizer = optim.Adam(self.predictor.parameters(), lr=cmd_args.learning_rate)
+
+        train_idxes = list(range(self.splits["Train"]))
+
+        best_loss = None
+        best_epoch = None
+        train_losses = {"mse": [], "mae": []}
+        val_losses = {"mse": [], "mae": []}
+
+        loss_for_early_stopping = "mse"
+        look_behind = 20
+        for epoch in range(cmd_args.num_epochs):
+            # Train one epoch
+            random.shuffle(train_idxes)
+            self.predictor.train()
+            avg_loss = loop_dataset(data_dir=self.data_dir,
+                                    instance_ids=self.instance_ids,
+                                    splits=self.splits,
+                                    epoch=epoch,
+                                    classifier=self.predictor,
+                                    sample_idxes=train_idxes,
+                                    optimizer=optimizer,
+                                    bsize=cmd_args.batch_size,
+                                    dataset_type="Train")
+            if not cmd_args.printAUC:
+                avg_loss[2] = 0.0
+            if self.predictor.regression:
+                print('\033[92m  Average training of epoch %d: loss %.5f mae %.5f\033[0m' % (
+                    epoch, avg_loss[0], avg_loss[1]))
+                train_losses["mse"].append(avg_loss[0])
+                train_losses["mae"].append(avg_loss[1])
+            else:
+                print('\033[92m  Average training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                      epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
+
+            # Validate one epoch
+            self.predictor.eval()
+            val_loss = loop_dataset(data_dir=self.data_dir,
+                                    instance_ids=self.instance_ids,
+                                    splits=self.splits,
+                                    epoch=epoch,
+                                    classifier=self.predictor,
+                                    sample_idxes=list(range(self.splits["Validation"])),
+                                    optimizer=None,
+                                    bsize=cmd_args.batch_size,
+                                    dataset_type="Validation")
+            if not cmd_args.printAUC:
+                val_loss[2] = 0.0
+            if self.predictor.regression:
+                print('\033[92m  Average validation of epoch %d: loss %.5f mae %.5f\033[0m' % (
+                    epoch, val_loss[0], val_loss[1]))
+                val_losses["mse"].append(val_loss[0])
+                val_losses["mae"].append(val_loss[1])
+            else:
+                print('\033[92m  Average validation of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                    epoch, val_loss[0], val_loss[1], val_loss[2]))
+
+            # Remember the last fully trained predictor
+            self.last_trained_predictor = self.predictor
+
+            # Get the current loss for early stopping
+            curr_loss = val_losses[loss_for_early_stopping][-1]
+
+            # Remember the best epoch
+            if best_epoch is None or best_loss is None or curr_loss < best_loss:
+                best_epoch = epoch
+                best_loss = curr_loss
+
+            if time_for_early_stopping(val_losses[loss_for_early_stopping], look_behind):
+                print("Training stopped due to low progress in validation loss!\n")
+                break
+
+            print()
+            gc.collect()
+
+        pd.DataFrame(train_losses).to_csv("models/DGCNN/dgcnn_Train_losses.csv", index=False)
+        pd.DataFrame(val_losses).to_csv("models/DGCNN/dgcnn_Validation_losses.csv", index=False)
+
+        # Retrain the model on train + validation data
+        train_validation_idxes = list(range(self.splits["Train"] + self.splits["Validation"]))
+        for epoch in range(cmd_args.num_epochs):
+            # Train one epoch
+            random.shuffle(train_validation_idxes)
+            self.predictor.train()
+            avg_loss = loop_dataset(data_dir=self.data_dir,
+                                    instance_ids=self.instance_ids,
+                                    splits=self.splits,
+                                    epoch=epoch,
+                                    classifier=self.predictor,
+                                    sample_idxes=train_validation_idxes,
+                                    optimizer=optimizer,
+                                    bsize=cmd_args.batch_size,
+                                    dataset_type="Train+Validation")
+            if not cmd_args.printAUC:
+                avg_loss[2] = 0.0
+            if self.predictor.regression:
+                print('\033[92m  Average training of epoch %d: loss %.5f mae %.5f\033[0m' % (
+                    epoch, avg_loss[0], avg_loss[1]))
+            else:
+                print('\033[92m  Average training of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                      epoch, avg_loss[0], avg_loss[1], avg_loss[2]))
+
+            # Remember the last fully trained predictor
+            self.last_trained_predictor = self.predictor
+
+        if cmd_args.extract_features:
+            train_val_graphs = load_next_batch(self.data_dir,
+                                               self.instance_ids,
+                                               list(sorted(train_validation_idxes)),
+                                               self.splits,
+                                               "Train+Validation")
+            features, labels = self.predictor.output_features(train_val_graphs)
+            labels = labels.type('torch.FloatTensor')
+            np.savetxt('models/DGCNN/extracted_features_train.txt',
+                       torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
+
+        torch.save(self.predictor, self.model_filename)
+
+    def test(self):
+        self.predictor = torch.load(self.model_filename)
+        test_losses = {"mse": [], "mae": []}
+
+        # Test the final model
+        self.predictor.eval()
+        test_loss = loop_dataset(data_dir=self.data_dir,
+                                 instance_ids=self.instance_ids,
+                                 splits=self.splits,
+                                 epoch=0,
+                                 classifier=self.predictor,
+                                 sample_idxes=list(range(self.splits["Test"])),
+                                 optimizer=None,
+                                 bsize=cmd_args.batch_size,
+                                 dataset_type="Test")
+        if not cmd_args.printAUC:
+            test_loss[2] = 0.0
+        if self.predictor.regression:
+            print('\033[92m  Average test of epoch %d: loss %.5f mae %.5f\033[0m' % (
+                0, test_loss[0], test_loss[1]))
+            test_losses["mse"].append(test_loss[0])
+            test_losses["mae"].append(test_loss[1])
+        else:
+            print('\033[92m  Average test of epoch %d: loss %.5f acc %.5f auc %.5f\033[0m' % (
+                  0, test_loss[0], test_loss[1], test_loss[2]))
+
+        with open("models/DGCNN/" + cmd_args.data + '_acc_results.txt', 'a+') as f:
+            f.write(str(test_loss[1]) + '\n')
+
+        pd.DataFrame(test_losses).to_csv("models/DGCNN/dgcnn_Test_losses.csv", index=False)
+
+        if cmd_args.printAUC:
+            with open(cmd_args.data + '_auc_results.txt', 'a+') as f:
+                f.write(str(test_loss[2]) + '\n')
+
+        if cmd_args.extract_features:
+            test_graphs = load_next_batch(self.data_dir,
+                                          self.instance_ids,
+                                          list(range(self.splits["Test"])),
+                                          self.splits,
+                                          "Test")
+            features, labels = self.predictor.output_features(test_graphs)
+            labels = labels.type('torch.FloatTensor')
+            np.savetxt('models/DGCNN/extracted_features_test.txt',
+                       torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
+
+    def __del__(self):
+        # In case a problem arises, serialize the last known fully trained predictor
+        torch.save(self.last_trained_predictor, self.model_filename)
+
+
+def main():
+    random.seed(cmd_args.seed)
+    np.random.seed(cmd_args.seed)
+    torch.manual_seed(cmd_args.seed)
+
+    dgcnn = DGCNNPredictor()
+    dgcnn.train()
+    dgcnn.test()
+
+    plot_losses()
+    plot_scores_per_solver()
+
+
+if __name__ == "__main__":
+    main()
