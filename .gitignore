@@ -8,7 +8,7 @@ bin/
 build/
 binaries/
 data/
-models/
+out/
 __pycache__/
 INSTANCES/SAT_Competition2007/
 INSTANCES/SAT_Competition2009/

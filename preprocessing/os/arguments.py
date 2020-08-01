@@ -12,7 +12,26 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
+def validate_model_arg():
+    if cmd_args.model not in ["KNN", "RF", "DGCNN"]:
+        raise ValueError(f"Unknown model: {cmd_args.model}")
+
+
 cmd_opt = argparse.ArgumentParser(description='Parser for main.py')
+# model_output_dir, model, cnf_dir
+cmd_opt.add_argument('-model_output_dir',
+                     type=str,
+                     default='~/Master-Thesis/out/models',
+                     help='Directory to write output data to. Default: ~/Master-Thesis/out/models')
+cmd_opt.add_argument('-model',
+                     type=str,
+                     default='DGCNN',
+                     help='Model abbrevation. Must be: "KNN", "RF" or "DGCNN". Default: DGCNN')
+cmd_opt.add_argument('-cnf_dir',
+                     type=str,
+                     default='~/Master-Thesis/INSTANCES',
+                     help='Directory that contains CNF in DIMACS format. Default: ~/Master-Thesis/INSTANCES')
+# Old
 cmd_opt.add_argument('-wd', type=str, default='', help='Working directory. Default: Current working directory')
 cmd_opt.add_argument('-printCategories', type=str2bool, nargs='?', const=True, default=True, help='Whether to print CNF files by category (True) or not (False). Default: True')
 cmd_opt.add_argument('-plotFilesizes', type=str2bool, nargs='?', const=True, default=True, help='Whether to plot size of CNF files (True) or not (False). Default: True')
@@ -23,3 +42,6 @@ cmd_opt.add_argument('-node2vec', type=str2bool, nargs='?', const=True, default=
 cmd_opt.add_argument('-dgcnn', type=str2bool, nargs='?', const=True, default=True, help='Whether to generate DGCNN files from CNF files (True) or not (False). Default: True')
 
 cmd_args, _ = cmd_opt.parse_known_args()
+
+# Arguments checks
+validate_model_arg()
