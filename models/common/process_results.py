@@ -30,7 +30,7 @@ def calculate_r2_and_rmse_metrics(best_model, x_test, y_test, y_pred=None):
     rmse_scores_test = np.empty((number_of_solvers,))
 
     y_true = y_test
-    if str(type(y_true)).find("DataFrame"):
+    if str(type(y_true)).find("DataFrame") != -1:
         y_true = y_true.values
 
     if y_pred is None:
@@ -58,20 +58,17 @@ def plot_r2_and_rmse_scores(r2_scores_test, rmse_scores_test, solver_names, mode
 
     print(f"Average R2 score: {r2_score_test_avg}, Average RMSE score: {rmse_score_test_avg}")
 
-    png_file = os.path.join(model_output_dir, f"{model}.png")
-    if os.path.exists(png_file):
-        return
-
+    png_file = os.path.join(model_output_dir, model, f"{model}.png")
     plt.figure(figsize=(15, 6))
 
     plt.subplot(1, 2, 1)
     xticks = range(1, len(r2_scores_test) + 1)
-    ymin = np.minimum(int(np.floor(np.min(r2_scores_test))), 0.0)
-    yticks = np.linspace(ymin, 1, 10 * (1 - ymin))
-    ylabels = np.round(yticks, 1)
+    ymin = np.maximum(np.minimum(np.floor(np.min(r2_scores_test)), 0), -10)
+    yticks = list(np.linspace(ymin, 1, int(10 * (1 - ymin))))
+    ylabels = list(np.round(yticks, 1))
     plt.title("R2 scores per solver")
     plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
-    plt.yticks(ticks=yticks, labels=ylabels)
+    plt.yticks(ticks=ylabels, labels=ylabels)
     plt.ylim((np.min(yticks), np.max(yticks)))
     plt.bar(xticks, r2_scores_test, color="#578FF7")
     plt.plot([xticks[0], xticks[-1]], [r2_score_test_avg, r2_score_test_avg], "r-")
@@ -124,5 +121,6 @@ def plot_losses_nn(model_output_dir, model):
         ax.set_xlabel("Epoch #")
         ax.legend()
 
+    plt.tight_layout()
     plt.savefig(os.path.join(model_output_dir, model, f"{model}_losses.png"))
     plt.close()

@@ -109,8 +109,8 @@ def train_model():
         rf.train(x_train, y_train, x_val, y_val, solver_names, cmd_args.model_dir)
         best_model = rf.retrain_the_best_model(x_train_val, y_train_val, cmd_args.model_dir)
     elif cmd_args.model == "DGCNN":
-        dgcnn.train(best_model, cmd_args.num_epochs, cmd_args.batch_size, cmd_args.look_behind, cmd_args.print_auc,
-                    cmd_args.extract_features)
+        dgcnn.train(best_model, cmd_args.num_epochs, cmd_args.batch_size, cmd_args.look_behind, cmd_args.print_auc)
+        dgcnn.retrain(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
         
     if cmd_args.model == "KNN" or cmd_args.model == "RF":
         save_the_best_model(best_model, cmd_args.model_dir, cmd_args.model)

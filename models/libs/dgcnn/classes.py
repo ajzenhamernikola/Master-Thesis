@@ -83,24 +83,21 @@ class DGCNNPredictor(object):
         self.regression = regression
 
         # Create a predictor
-        overwrite = True
         if os.path.exists(self.model_filename):
-            print("\nModel already exist. Would you like to overwrite it [o], continue training [t], " +
-                  "or use existing [e]?")
+            print("\nModel already exist. Would you like to overwrite it [o] or use existing [e]?")
             response = input().lower()
             if response == "e":
-                return
-            if response == "t":
-                overwrite = False
-            elif response != "o":
+                self.load()
+            elif response == "o":
+                self.predictor = Predictor(latent_dim, out_dim, hidden, num_class, dropout,
+                                           feat_dim, attr_dim, edge_feat_dim,
+                                           sortpooling_k, conv1d_activation, mode, regression)
+                self.best_loss = None
+                self.best_epoch = None
+                self.train_losses = {"mse": [], "mae": []}
+                self.val_losses = {"mse": [], "mae": []}
+            else:
                 raise ValueError(f"Unknown response: '{response}'. You must enter: 'o', 't' or 'e'")
-
-        if overwrite:
-            self.predictor = Predictor(latent_dim, out_dim, hidden, num_class, dropout,
-                                       feat_dim, attr_dim, edge_feat_dim,
-                                       sortpooling_k, conv1d_activation, mode, regression)
-        else:
-            self.load()
 
         if mode == 'gpu':
             self.predictor = self.predictor.cuda()
@@ -111,7 +108,13 @@ class DGCNNPredictor(object):
         self.optimizer = optim.Adam(self.predictor.parameters(), lr=learning_rate)
 
     def persist(self):
-        torch.save(self.predictor, self.model_filename)
+        torch.save([self.predictor, self.best_loss, self.best_epoch, self.train_losses, self.val_losses],
+                   self.model_filename)
 
     def load(self):
-        self.predictor = torch.load(self.model_filename)
+        data = torch.load(self.model_filename)
+        self.predictor = data[0]
+        self.best_loss = data[1]
+        self.best_epoch = data[2]
+        self.train_losses = data[3]
+        self.val_losses = data[4]

@@ -19,7 +19,7 @@ bsize=1   # batch size, set to 50 or 100 to accelerate training
 dropout=True
 
 # dataset-specific settings
-num_epochs=1 #100
+num_epochs=100
 look_behind=1 #30
 learning_rate=0.0001
 

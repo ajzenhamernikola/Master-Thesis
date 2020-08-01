@@ -11,6 +11,16 @@ from .libs.dgcnn.util import loop_dataset, load_next_batch
 from .common.nn import time_for_early_stopping
 
 
+def print_box(message: str, length=80):
+    message_len = len(message)
+    left_spaces = right_spaces = ((80 - message_len - 1) // 2)
+    if message_len % 2 == 1:
+        left_spaces -= 1
+    print(length * "*")
+    print("*" + left_spaces * " " + message + right_spaces * " " + "*")
+    print(length * "*")
+
+
 def train_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, idxes: list, train_losses: dict,
                     dataset_type: str, print_auc: bool):
     random.shuffle(idxes)
@@ -63,50 +73,77 @@ def validate_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, val_l
             epoch, val_loss[0], val_loss[1], val_loss[2]))
 
 
-def train(dgcnn: DGCNNPredictor, num_epochs: int, batch_size: int, look_behind: int,
-          print_auc=False, extract_features=False):
+def train(dgcnn: DGCNNPredictor, num_epochs: int, batch_size: int, look_behind: int, print_auc=False):
     train_idxes = list(range(dgcnn.splits["Train"]))
-
-    best_loss = None
-    best_epoch = None
-    train_losses = {"mse": [], "mae": []}
-    val_losses = {"mse": [], "mae": []}
-
     loss_for_early_stopping = "mse"
-    for epoch in range(num_epochs):
+    first_epoch = len(dgcnn.train_losses[loss_for_early_stopping])
+
+    if first_epoch != 0:
+        print(f"Enter the number of epochs to train after {first_epoch}:")
+        additional_epochs = int(input().strip())
+        if additional_epochs == 0:
+            return
+        look_behind += additional_epochs
+
+    print_box("TRAINING")
+
+    for epoch in range(first_epoch, num_epochs):
         # Train one epoch
-        train_one_epoch(dgcnn, epoch, batch_size, train_idxes, train_losses, "Train", print_auc)
+        train_one_epoch(dgcnn, epoch, batch_size, train_idxes, dgcnn.train_losses, "Train", print_auc)
 
         # Validate one epoch
-        validate_one_epoch(dgcnn, epoch, batch_size, val_losses, print_auc)
+        validate_one_epoch(dgcnn, epoch, batch_size, dgcnn.val_losses, print_auc)
 
         # Get the current loss for early stopping
-        curr_loss = val_losses[loss_for_early_stopping][-1]
+        curr_loss = dgcnn.val_losses[loss_for_early_stopping][-1]
 
         # Remember the best epoch
-        if best_epoch is None or best_loss is None or curr_loss < best_loss:
-            best_epoch = epoch
-            best_loss = curr_loss
+        if dgcnn.best_epoch is None or dgcnn.best_loss is None or curr_loss < dgcnn.best_loss:
+            dgcnn.best_epoch = epoch
+            dgcnn.best_loss = curr_loss
 
-        if time_for_early_stopping(val_losses[loss_for_early_stopping], look_behind):
-            print("Training stopped due to low progress in validation loss!\n")
-            break
+        if time_for_early_stopping(dgcnn.val_losses[loss_for_early_stopping], look_behind):
+            print("\nTraining stopped due to low progress in validation loss!")
+            print("Do you want to train more? [y/n]")
+            stop_training = input().strip().lower() == "n"
+            if stop_training:
+                break
+
+            print("Do you want to train more? [y/n]")
+            print(f"Enter the number of epochs to train after {look_behind}:")
+            additional_epochs = int(input().strip())
+            look_behind += additional_epochs
 
         print()
         gc.collect()
 
     # Save losses to files
     train_losses_filename = os.path.join(dgcnn.model_output_dir, dgcnn.model, "Train_losses.csv")
-    pd.DataFrame(train_losses).to_csv(train_losses_filename, index=False)
+    pd.DataFrame(dgcnn.train_losses).to_csv(train_losses_filename, index=False)
 
     val_losses_filename = os.path.join(dgcnn.model_output_dir, dgcnn.model, "Validation_losses.csv")
-    pd.DataFrame(val_losses).to_csv(val_losses_filename, index=False)
+    pd.DataFrame(dgcnn.val_losses).to_csv(val_losses_filename, index=False)
+
+    # Persist the model in case retraining fails
+    dgcnn.persist()
+
+
+def retrain(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_auc=False):
+    print("Do you want to retrain the model? [y/n]")
+    no_retraining = input().strip().lower() == "n"
+    if no_retraining:
+        return
+
+    print_box(f"RETRAINING {dgcnn.best_epoch} EPOCH(S)")
 
     # Retrain the model on train + validation data
     train_validation_idxes = list(range(dgcnn.splits["Train"] + dgcnn.splits["Validation"]))
-    for epoch in range(best_epoch+1):
-        train_one_epoch(dgcnn, epoch, batch_size, train_validation_idxes, train_losses, "Train+Validation", print_auc)
+    for epoch in range(dgcnn.best_epoch + 1):
+        train_one_epoch(dgcnn, epoch, batch_size, train_validation_idxes, dgcnn.train_losses, "Train+Validation",
+                        print_auc)
         gc.collect()
+
+    print()
 
     # Extract embedded features
     if extract_features:
@@ -127,6 +164,8 @@ def train(dgcnn: DGCNNPredictor, num_epochs: int, batch_size: int, look_behind: 
 def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_auc=False):
     # Load previously persisted model
     dgcnn.load()
+
+    print_box("TESTING")
 
     # Test the final model
     dgcnn.predictor.eval()
@@ -160,3 +199,5 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
         labels = labels.type('torch.FloatTensor')
         np.savetxt(os.path.join(dgcnn.model_output_dir, dgcnn.model, 'extracted_features_test.txt'),
                    torch.cat([labels.unsqueeze(1), features.cpu()], dim=1).detach().numpy(), '%.4f')
+
+    print()
