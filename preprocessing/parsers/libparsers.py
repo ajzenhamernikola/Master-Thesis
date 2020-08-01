@@ -28,8 +28,8 @@ class ParsersLib(object):
 
 dirname = os.path.dirname(os.path.realpath(__file__))
 dll_path = f'{dirname}/build/dll/libparsers.so'
-if os.path.exists(dll_path):
-    msg = "Could not find the required shared library: libparsers.so\n" + \
+if not os.path.exists(dll_path):
+    msg = f"Could not find the required shared library: libparsers.so in: {dll_path}\n" + \
           f"Try running `make` in directory: {dirname}"
     raise FileNotFoundError(msg)
 

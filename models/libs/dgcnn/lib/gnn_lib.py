@@ -3,12 +3,11 @@ import numpy as np
 import os
 import sys
 import torch
-import pdb
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 
-class _gnn_lib(object):
+class GNNLIB(object):
     def __init__(self, args):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         self.lib = ctypes.CDLL('%s/build/dll/libgnn.so' % dir_path)
@@ -26,7 +25,7 @@ class _gnn_lib(object):
 
         self.batch_graph_handle = ctypes.c_void_p(self.lib.GetGraphStruct())
 
-    def _prepare_graph(self, graph_list, is_directed=0):    
+    def prepare_graph(self, graph_list, is_directed=0):
         edgepair_list = (ctypes.c_void_p * len(graph_list))()
         list_num_nodes = np.zeros((len(graph_list), ), dtype=np.int32)
         list_num_edges = np.zeros((len(graph_list), ), dtype=np.int32)        
@@ -52,9 +51,9 @@ class _gnn_lib(object):
 
         return total_num_nodes, total_num_edges
 
-    def PrepareSparseMatrices(self, graph_list, is_directed=0):
+    def prepare_sparse_matrices(self, graph_list, is_directed=0):
         assert not is_directed
-        total_num_nodes, total_num_edges = self._prepare_graph(graph_list, is_directed)
+        total_num_nodes, total_num_edges = self.prepare_graph(graph_list, is_directed)
         
         n2n_idxes = torch.LongTensor(2, total_num_edges * 2)
         n2n_vals = torch.FloatTensor(total_num_edges * 2)
@@ -84,9 +83,6 @@ class _gnn_lib(object):
         subg_sp = torch.sparse.FloatTensor(subg_idxes, subg_vals, torch.Size([len(graph_list), total_num_nodes]))
         return n2n_sp, e2n_sp, subg_sp
 
-dll_path = '%s/build/dll/libgnn.so' % os.path.dirname(os.path.realpath(__file__))
-if os.path.exists(dll_path):
-    GNNLIB = _gnn_lib(sys.argv)
-else:
-    GNNLIB = None
 
+dll_path = '%s/build/dll/libgnn.so' % os.path.dirname(os.path.realpath(__file__))
+gnnlib = GNNLIB(sys.argv)

@@ -1,13 +1,8 @@
-from __future__ import print_function, absolute_import
-
-import os
-import sys
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from .lib.gnn_lib import GNNLIB
+from .lib.gnn_lib import gnnlib
 from .lib.pytorch_util import weights_init, gnn_spmm
 
 
@@ -43,8 +38,6 @@ class DGCNN(nn.Module):
         dense_dim = int((k - 2) / 2 + 1)
         self.dense_dim = (dense_dim - conv1d_kws[1] + 1) * conv1d_channels[1]
 
-        #if num_edge_feats > 0:
-        #    self.w_e2l = nn.Linear(num_edge_feats, num_node_feats)
         if output_dim > 0:
             self.out_params = nn.Linear(self.dense_dim, output_dim)
 
@@ -57,7 +50,7 @@ class DGCNN(nn.Module):
         node_degs = [torch.Tensor(graph_list[i].degs) + 1 for i in range(len(graph_list))]
         node_degs = torch.cat(node_degs).unsqueeze(1)
 
-        n2n_sp, e2n_sp, subg_sp = GNNLIB.PrepareSparseMatrices(graph_list)
+        n2n_sp, e2n_sp, subg_sp = gnnlib.prepare_sparse_matrices(graph_list)
 
         if torch.cuda.is_available() and isinstance(node_feat, torch.cuda.FloatTensor):
             n2n_sp = n2n_sp.cuda()
@@ -79,14 +72,14 @@ class DGCNN(nn.Module):
         return h
 
     def sortpooling_embedding(self, node_feat, edge_feat, n2n_sp, e2n_sp, subg_sp, graph_sizes, node_degs):
-        ''' if exists edge feature, concatenate to node feature vector '''
+        # If exists edge feature, concatenate to node feature vector
         if edge_feat is not None:
-            #input_edge_linear = self.w_e2l(edge_feat)
+            # input_edge_linear = self.w_e2l(edge_feat)
             input_edge_linear = edge_feat
             e2npool_input = gnn_spmm(e2n_sp, input_edge_linear)
             node_feat = torch.cat([node_feat, e2npool_input], 1)
 
-        ''' graph convolution layers '''
+        # Graph convolution layers
         lv = 0
         cur_message_layer = node_feat
         cat_message_layers = []
@@ -100,7 +93,7 @@ class DGCNN(nn.Module):
 
         cur_message_layer = torch.cat(cat_message_layers, 1)
 
-        ''' sortpooling layer '''
+        # Sortpooling layer
         sort_channel = cur_message_layer[:, -1]
         batch_sortpooling_graphs = torch.zeros(len(graph_sizes), self.k, self.total_latent_dim)
         if torch.cuda.is_available() and isinstance(node_feat.data, torch.cuda.FloatTensor):
@@ -124,7 +117,7 @@ class DGCNN(nn.Module):
             batch_sortpooling_graphs[i] = sortpooling_graph
             accum_count += graph_sizes[i]
 
-        ''' traditional 1d convlution and dense layers '''
+        # Traditional 1d convlution and dense layers
         to_conv1d = batch_sortpooling_graphs.view((-1, 1, self.k * self.total_latent_dim))
         conv1d_res = self.conv1d_params1(to_conv1d)
         conv1d_res = self.conv1d_activation(conv1d_res)
