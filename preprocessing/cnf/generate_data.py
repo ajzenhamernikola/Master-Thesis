@@ -96,6 +96,7 @@ def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, 
     instance_ids = []
     splits = {}
     test_ys = []
+    test_instances = []
     for i in range(len(data)):
         instance_id = data.iloc[i]['instance_id']
         if is_unsolvable(ys, instance_id):
@@ -113,6 +114,7 @@ def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, 
         labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0])
         if split == "Test":
             test_ys.append(labels)
+            test_instances.append(instance_id)
 
         filename = os.path.join(cnf_dir, instance_id)
         features_filename = filename + '.dgcnn.txt'
@@ -130,6 +132,8 @@ def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, 
 
     # Saving true labels
     np.savetxt(os.path.join(model_output_dir, model, "test_ytrue.txt"), np.array(test_ys, dtype=np.float32))
+    with open(os.path.join(model_output_dir, model, "test_ytrue_instances.txt"), "w") as f:
+        f.writelines(i + '\n' for i in test_instances)
     # Saving parsed instance ids
     instance_ids_file = os.path.join(model_output_dir, model, "instance_ids.pickled")
     with open(instance_ids_file, "wb") as instance_ids_file:

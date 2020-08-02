@@ -11,18 +11,6 @@ from .classes import Predictor
 
 
 def load_next_batch(cnf_dir: str, instance_ids: list, selected_idx: list, splits: dict, dataset_type: str):
-    train_size = splits["Train"]
-    val_size = splits["Validation"]
-
-    if dataset_type == "Train":
-        instance_ids = instance_ids[:train_size]
-    elif dataset_type == "Validation":
-        instance_ids = instance_ids[train_size:train_size + val_size]
-    elif dataset_type == "Train+Validation":
-        instance_ids = instance_ids[:train_size + val_size]
-    elif dataset_type == "Test":
-        instance_ids = instance_ids[train_size + val_size:]
-
     batch_graph = []
     labels = []
     for idx in selected_idx:
@@ -38,11 +26,22 @@ def load_next_batch(cnf_dir: str, instance_ids: list, selected_idx: list, splits
 def loop_dataset(cnf_dir: str, model_output_dir: str, model: str, instance_ids: list, splits: dict, epoch: int,
                  classifier: Predictor, sample_idxes: list, optimizer=None, batch_size=1, dataset_type="Train",
                  print_auc=False):
+    instance_ids_tmp = []
+    for idx in sample_idxes:
+        instance_ids_tmp.append(instance_ids[idx])
+    instance_ids = instance_ids_tmp
+    sample_idxes = list(range(len(instance_ids)))
+    
     total_loss = []
     total_iters = (len(sample_idxes) + (batch_size - 1) * (optimizer is None)) // batch_size
     pbar = tqdm(range(total_iters), unit='batch')
     all_targets = []
     all_scores = []
+    
+    y_pred_instances_filename = os.path.join(model_output_dir, model, "test_ypred_instances.txt")
+    if dataset_type == "Test":
+        if os.path.exists(y_pred_instances_filename):
+            os.remove(y_pred_instances_filename)
 
     n_samples = 0
     for pos in pbar:
@@ -50,6 +49,13 @@ def loop_dataset(cnf_dir: str, model_output_dir: str, model: str, instance_ids: 
 
         batch_graph, targets = load_next_batch(cnf_dir, instance_ids, selected_idx, splits, dataset_type)
         all_targets += targets
+
+        if dataset_type == "Test":
+            for i in range(len(selected_idx)):
+                idx = selected_idx[i]
+                instance_id = instance_ids[idx]
+                with open(y_pred_instances_filename, "a") as f:
+                    f.write(instance_id + '\n')
 
         if classifier.regression:
             pred, mae, loss = classifier(batch_graph)

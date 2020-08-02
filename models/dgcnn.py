@@ -50,6 +50,9 @@ def train_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, idxes: l
 
 def validate_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, val_losses: dict, print_auc: bool):
     dgcnn.predictor.eval()
+    
+    val_idxes = list(range(dgcnn.splits["Train"], dgcnn.splits["Train"] + dgcnn.splits["Validation"]))
+    
     val_loss = loop_dataset(cnf_dir=dgcnn.cnf_dir,
                             model_output_dir=dgcnn.model_output_dir,
                             model=dgcnn.model,
@@ -57,7 +60,7 @@ def validate_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, val_l
                             splits=dgcnn.splits,
                             epoch=epoch,
                             classifier=dgcnn.predictor,
-                            sample_idxes=list(range(dgcnn.splits["Validation"])),
+                            sample_idxes=val_idxes,
                             optimizer=None,
                             batch_size=batch_size,
                             dataset_type="Validation")
@@ -167,6 +170,9 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
 
     print_box("TESTING")
 
+    test_idxes = list(range(dgcnn.splits["Train"] + dgcnn.splits["Validation"],
+                            dgcnn.splits["Train"] + dgcnn.splits["Validation"] + dgcnn.splits["Test"]))
+
     # Test the final model
     dgcnn.predictor.eval()
     test_loss = loop_dataset(cnf_dir=dgcnn.cnf_dir,
@@ -176,7 +182,7 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
                              splits=dgcnn.splits,
                              epoch=0,
                              classifier=dgcnn.predictor,
-                             sample_idxes=list(range(dgcnn.splits["Test"])),
+                             sample_idxes=test_idxes,
                              optimizer=None,
                              batch_size=batch_size,
                              dataset_type="Test")

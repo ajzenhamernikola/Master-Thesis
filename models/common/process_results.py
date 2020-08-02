@@ -63,7 +63,8 @@ def plot_r2_and_rmse_scores(r2_scores_test, rmse_scores_test, solver_names, mode
 
     plt.subplot(1, 2, 1)
     xticks = range(1, len(r2_scores_test) + 1)
-    ymin = np.maximum(np.minimum(np.floor(np.min(r2_scores_test)), 0), -10)
+    yticks = np.round(r2_scores_test, 1)
+    ymin = np.maximum(np.minimum(np.min(yticks), 0), -10)
     yticks = list(np.linspace(ymin, 1, int(10 * (1 - ymin))))
     ylabels = list(np.round(yticks, 1))
     plt.title("R2 scores per solver")
@@ -102,22 +103,28 @@ def plot_r2_and_rmse_scores_nn(r2_scores_test, rmse_scores_test, model_output_di
 def plot_losses_nn(model_output_dir, model):
     train_losses = pd.read_csv(os.path.join(model_output_dir, model, "Train_losses.csv"))
     val_losses = pd.read_csv(os.path.join(model_output_dir, model, "Validation_losses.csv"))
+    
+    n = len(train_losses) - 1
+    train_losses_mse = list(train_losses["mse"])[1:]
+    train_losses_mae = list(train_losses["mae"])[1:]
+    val_losses_mse = list(val_losses["mse"])[1:]
+    val_losses_mae = list(val_losses["mae"])[1:]
 
     fig, (top_ax, bot_ax) = plt.subplots(2)
     fig.suptitle("Training/Validation progress")
-    fig.set_size_inches(w=len(train_losses) * 0.5, h=15)
+    fig.set_size_inches(w=n * 0.5, h=15)
 
     top_ax.set_ylabel("MSE loss value")
-    top_ax.plot(range(len(train_losses["mse"])), train_losses["mse"], color="blue", linestyle="solid", label="Train")
-    top_ax.plot(range(len(val_losses["mse"])), val_losses["mse"], color="magenta", linestyle="solid", label="Val")
+    top_ax.plot(range(n), train_losses_mse, color="blue", linestyle="solid", label="Train")
+    top_ax.plot(range(n), val_losses_mse, color="magenta", linestyle="solid", label="Val")
 
     bot_ax.set_ylabel("MAE loss value")
-    bot_ax.plot(range(len(train_losses["mae"])), train_losses["mae"], color="red", linestyle="solid", label="Train")
-    bot_ax.plot(range(len(val_losses["mae"])), val_losses["mae"], color="orange", linestyle="solid", label="Val")
+    bot_ax.plot(range(n), train_losses_mae, color="red", linestyle="solid", label="Train")
+    bot_ax.plot(range(n), val_losses_mae, color="orange", linestyle="solid", label="Val")
 
     for ax in fig.get_axes():
-        ax.set_xticks(range(len(train_losses)))
-        ax.set_xticklabels(range(1, len(train_losses) + 1))
+        ax.set_xticks(range(n))
+        ax.set_xticklabels(range(1, n + 1))
         ax.set_xlabel("Epoch #")
         ax.legend()
 
