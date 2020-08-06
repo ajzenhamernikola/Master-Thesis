@@ -9,6 +9,7 @@ import numpy as np
 import graphvite
 from tqdm import tqdm
 import networkx as nx
+from sklearn.preprocessing import MinMaxScaler
 
 from ..parsers.libparsers import parserslib
 from ..os.process import start_process
@@ -92,11 +93,14 @@ def generate_edgelist_formats(csv_filename, directory='.'):
 def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, model):
     data = pd.read_csv(csv_filename).sort_values(by="split", key=sort_by_split)
     ys = pd.read_csv(csv_labels)
+    
     features_filenames = []
     instance_ids = []
     splits = {}
-    test_ys = []
-    test_instances = []
+    
+    ys_by_splits = {}
+    instances_by_splits = {}
+    
     for i in range(len(data)):
         instance_id = data.iloc[i]['instance_id']
         if is_unsolvable(ys, instance_id):
@@ -111,10 +115,15 @@ def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, 
             continue
 
         instance_ids.append(instance_id)
-        labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0])
-        if split == "Test":
-            test_ys.append(labels)
-            test_instances.append(instance_id)
+        labels = log10_transform_data(ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0]).reshape(1, -1)
+        
+        if split not in ys_by_splits:
+            ys_by_splits[split] = []
+        if split not in instances_by_splits:
+            instances_by_splits[split] = []
+        
+        ys_by_splits[split].append(labels)
+        instances_by_splits[split].append(instance_id)
 
         filename = os.path.join(cnf_dir, instance_id)
         features_filename = filename + '.dgcnn.txt'
@@ -131,9 +140,15 @@ def generate_dgcnn_formats(csv_filename, csv_labels, cnf_dir, model_output_dir, 
           f"\n\t{splits['None']} in None")
 
     # Saving true labels
-    np.savetxt(os.path.join(model_output_dir, model, "test_ytrue.txt"), np.array(test_ys, dtype=np.float32))
-    with open(os.path.join(model_output_dir, model, "test_ytrue_instances.txt"), "w") as f:
-        f.writelines(i + '\n' for i in test_instances)
+    for split in splits.keys():
+        if split in ys_by_splits:
+            labels = ys_by_splits[split]
+            np.savetxt(os.path.join(model_output_dir, model, f"{split}_ytrue.txt"), 
+                       np.array(labels, dtype=np.float32).reshape((-1, 31)))
+        if split in instances_by_splits:
+            with open(os.path.join(model_output_dir, model, f"{split}_ytrue_instances.txt"), "w") as f:
+                f.writelines(i + '\n' for i in instances_by_splits[split])
+
     # Saving parsed instance ids
     instance_ids_file = os.path.join(model_output_dir, model, "instance_ids.pickled")
     with open(instance_ids_file, "wb") as instance_ids_file:

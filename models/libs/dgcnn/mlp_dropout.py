@@ -14,7 +14,7 @@ from tqdm import tqdm
 import pdb
 
 sys.path.append('%s/lib' % os.path.dirname(os.path.realpath(__file__)))
-from pytorch_util import weights_init
+from .lib.pytorch_util import weights_init
 
 class MLPRegression(nn.Module):
     def __init__(self, input_size, hidden_size, output_size=1, with_dropout=False):
@@ -28,7 +28,7 @@ class MLPRegression(nn.Module):
 
     def forward(self, x, y = None):
         h1 = self.h1_weights(x)
-        h1 = F.relu(h1)
+        h1 = F.hardtanh(h1, -1.5, 1.5)
 
         if self.with_dropout:
             h1 = F.dropout(h1, training=self.training)

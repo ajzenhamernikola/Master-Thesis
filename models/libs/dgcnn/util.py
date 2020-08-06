@@ -1,13 +1,19 @@
 import os
 import pickle as pkl
 import gc
+import random
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn import metrics
+from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 
 from .classes import Predictor
+
+
+# ys = pd.read_csv(os.path.join(os.path.dirname(__file__), "..", "..", "..", "INSTANCES", "all_data_y.csv"))
 
 
 def load_next_batch(cnf_dir: str, instance_ids: list, selected_idx: list, splits: dict, dataset_type: str):
@@ -19,18 +25,28 @@ def load_next_batch(cnf_dir: str, instance_ids: list, selected_idx: list, splits
         with open(pickle_file, "rb") as f:
             batch_graph.append(pkl.load(f))
             labels.append(batch_graph[-1].labels)
+            # label = ys[ys["instance_id"] == instance_id].drop(columns="instance_id").values[0].reshape(1, -1)
+            # labels.append(label)
+            # batch_graph[-1].labels = list(label)[0]
 
     return batch_graph, labels
 
 
 def loop_dataset(cnf_dir: str, model_output_dir: str, model: str, instance_ids: list, splits: dict, epoch: int,
-                 classifier: Predictor, sample_idxes: list, optimizer=None, batch_size=1, dataset_type="Train",
+                 classifier: Predictor, sample_idxes: list, random_shuffle=False, optimizer=None, batch_size=1, dataset_type="Train",
                  print_auc=False):
     instance_ids_tmp = []
     for idx in sample_idxes:
         instance_ids_tmp.append(instance_ids[idx])
     instance_ids = instance_ids_tmp
     sample_idxes = list(range(len(instance_ids)))
+    
+    if random_shuffle:
+        random.shuffle(sample_idxes)
+        instances_filename = os.path.join(model_output_dir, model, f"{dataset_type}_{epoch}_instances.txt")
+        with open(instances_filename, "w") as f:
+            for idx in sample_idxes:
+                f.write(instance_ids[idx] + "\n")
     
     total_loss = []
     total_iters = (len(sample_idxes) + (batch_size - 1) * (optimizer is None)) // batch_size
@@ -92,10 +108,10 @@ def loop_dataset(cnf_dir: str, model_output_dir: str, model: str, instance_ids: 
     all_scores = torch.cat(all_scores).cpu().numpy()
 
     if dataset_type == "Test":
-        predictions_filename = os.path.join(model_output_dir, model, "test_ypred.txt")
+        predictions_filename = os.path.join(model_output_dir, model, "Test_ypred.txt")
     else:
         predictions_filename = os.path.join(model_output_dir, model, f"{dataset_type}_{epoch}_outputs.txt")
-    np.savetxt(predictions_filename, all_scores)  # output predictions
+    np.savetxt(predictions_filename, all_scores, "%.6f")  # output predictions
 
     if not classifier.regression and print_auc:
         all_targets = np.array(all_targets)

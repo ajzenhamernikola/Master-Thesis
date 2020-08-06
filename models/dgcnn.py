@@ -23,7 +23,6 @@ def print_box(message: str, length=80):
 
 def train_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, idxes: list, train_losses: dict,
                     dataset_type: str, print_auc: bool):
-    random.shuffle(idxes)
     dgcnn.predictor.train()
     avg_loss = loop_dataset(cnf_dir=dgcnn.cnf_dir,
                             model_output_dir=dgcnn.model_output_dir,
@@ -33,6 +32,7 @@ def train_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, idxes: l
                             epoch=epoch,
                             classifier=dgcnn.predictor,
                             sample_idxes=idxes,
+                            random_shuffle=True,
                             optimizer=dgcnn.optimizer,
                             batch_size=batch_size,
                             dataset_type=dataset_type)
@@ -61,6 +61,7 @@ def validate_one_epoch(dgcnn: DGCNNPredictor, epoch: int, batch_size: int, val_l
                             epoch=epoch,
                             classifier=dgcnn.predictor,
                             sample_idxes=val_idxes,
+                            random_shuffle=False,
                             optimizer=None,
                             batch_size=batch_size,
                             dataset_type="Validation")
@@ -150,11 +151,11 @@ def retrain(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, prin
 
     # Extract embedded features
     if extract_features:
-        train_val_graphs = load_next_batch(dgcnn.cnf_dir,
-                                           dgcnn.instance_ids,
-                                           list(sorted(train_validation_idxes)),
-                                           dgcnn.splits,
-                                           "Train+Validation")
+        train_val_graphs = load_next_batch(cnf_dir=dgcnn.cnf_dir,
+                                           instance_ids=dgcnn.instance_ids,
+                                           selected_idx=list(sorted(train_validation_idxes)),
+                                           splits=dgcnn.splits,
+                                           dataset_type="Train+Validation")
         features, labels = dgcnn.predictor.output_features(train_val_graphs)
         labels = labels.type('torch.FloatTensor')
         np.savetxt(os.path.join(dgcnn.model_output_dir, dgcnn.model, 'extracted_features_train.txt'),
@@ -183,6 +184,7 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
                              epoch=0,
                              classifier=dgcnn.predictor,
                              sample_idxes=test_idxes,
+                             random_shuffle=False,
                              optimizer=None,
                              batch_size=batch_size,
                              dataset_type="Test")
@@ -196,11 +198,11 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
               0, test_loss[0], test_loss[1], test_loss[2]))
 
     if extract_features:
-        test_graphs = load_next_batch(dgcnn.cnf_dir,
-                                      dgcnn.instance_ids,
-                                      list(range(dgcnn.splits["Test"])),
-                                      dgcnn.splits,
-                                      "Test")
+        test_graphs = load_next_batch(cnf_dir=dgcnn.cnf_dir,
+                                      instance_ids=dgcnn.instance_ids,
+                                      selected_idx=list(range(dgcnn.splits["Test"])),
+                                      splits=dgcnn.splits,
+                                      dataset_type="Test")
         features, labels = dgcnn.predictor.output_features(test_graphs)
         labels = labels.type('torch.FloatTensor')
         np.savetxt(os.path.join(dgcnn.model_output_dir, dgcnn.model, 'extracted_features_test.txt'),

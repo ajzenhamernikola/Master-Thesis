@@ -32,8 +32,10 @@ class DGCNN(nn.Module):
             self.conv_params.append(nn.Linear(latent_dim[i-1], latent_dim[i]))
 
         self.conv1d_params1 = nn.Conv1d(1, conv1d_channels[0], conv1d_kws[0], conv1d_kws[0])
+        self.conv1d_act1 = nn.PReLU(conv1d_channels[0])
         self.maxpool1d = nn.MaxPool1d(2, 2)
         self.conv1d_params2 = nn.Conv1d(conv1d_channels[0], conv1d_channels[1], conv1d_kws[1], 1)
+        self.conv1d_act2 = nn.PReLU(conv1d_channels[1])
 
         dense_dim = int((k - 2) / 2 + 1)
         self.dense_dim = (dense_dim - conv1d_kws[1] + 1) * conv1d_channels[1]
@@ -41,7 +43,8 @@ class DGCNN(nn.Module):
         if output_dim > 0:
             self.out_params = nn.Linear(self.dense_dim, output_dim)
 
-        self.conv1d_activation = eval('nn.{}()'.format(conv1d_activation))
+        act_str = conv1d_activation + ('' if conv1d_activation.find('(') != -1 else '()')
+        self.conv1d_activation = eval(f'nn.{act_str}')
 
         weights_init(self)
 
@@ -120,10 +123,10 @@ class DGCNN(nn.Module):
         # Traditional 1d convlution and dense layers
         to_conv1d = batch_sortpooling_graphs.view((-1, 1, self.k * self.total_latent_dim))
         conv1d_res = self.conv1d_params1(to_conv1d)
-        conv1d_res = self.conv1d_activation(conv1d_res)
+        conv1d_res = self.conv1d_act1(conv1d_res)
         conv1d_res = self.maxpool1d(conv1d_res)
         conv1d_res = self.conv1d_params2(conv1d_res)
-        conv1d_res = self.conv1d_activation(conv1d_res)
+        conv1d_res = self.conv1d_act2(conv1d_res)
 
         to_dense = conv1d_res.view(len(graph_sizes), -1)
 

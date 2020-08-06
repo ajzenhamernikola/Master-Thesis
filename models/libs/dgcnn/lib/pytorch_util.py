@@ -28,12 +28,14 @@ def glorot_uniform(t):
     limit = np.sqrt(6.0 / (fan_in + fan_out))
     t.uniform_(-limit, limit)
 
+
 def _param_init(m):
     if isinstance(m, Parameter):
         glorot_uniform(m.data)
     elif isinstance(m, nn.Linear):
         m.bias.data.zero_()
         glorot_uniform(m.weight.data)
+
 
 def weights_init(m):
     for p in m.modules():

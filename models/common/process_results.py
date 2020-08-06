@@ -44,8 +44,8 @@ def calculate_r2_and_rmse_metrics(best_model, x_test, y_test, y_pred=None):
 
 
 def calculate_r2_and_rmse_metrics_nn(best_model, model_output_dir, model):
-    y_pred = np.loadtxt(os.path.join(model_output_dir, model, "test_ypred.txt"))
-    y_true = np.loadtxt(os.path.join(model_output_dir, model, "test_ytrue.txt"))
+    y_pred = np.loadtxt(os.path.join(model_output_dir, model, "Test_ypred.txt"))
+    y_true = np.loadtxt(os.path.join(model_output_dir, model, "Test_ytrue.txt"))
 
     return calculate_r2_and_rmse_metrics(best_model, None, y_true, y_pred)
 
@@ -104,11 +104,11 @@ def plot_losses_nn(model_output_dir, model):
     train_losses = pd.read_csv(os.path.join(model_output_dir, model, "Train_losses.csv"))
     val_losses = pd.read_csv(os.path.join(model_output_dir, model, "Validation_losses.csv"))
     
-    n = len(train_losses) - 1
-    train_losses_mse = list(train_losses["mse"])[1:]
-    train_losses_mae = list(train_losses["mae"])[1:]
-    val_losses_mse = list(val_losses["mse"])[1:]
-    val_losses_mae = list(val_losses["mae"])[1:]
+    n = len(train_losses)
+    train_losses_mse = list(train_losses["mse"])
+    train_losses_mae = list(train_losses["mae"])
+    val_losses_mse = list(val_losses["mse"])
+    val_losses_mae = list(val_losses["mae"])
 
     fig, (top_ax, bot_ax) = plt.subplots(2)
     fig.suptitle("Training/Validation progress")

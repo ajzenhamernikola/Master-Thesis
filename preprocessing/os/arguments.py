@@ -13,7 +13,7 @@ def str2bool(v):
 
 
 def validate_model_arg():
-    if cmd_args.model not in ["KNN", "RF", "DGCNN"]:
+    if cmd_args.model not in ["KNN", "RF", "GCN", "DGCNN"]:
         raise ValueError(f"Unknown model: {cmd_args.model}")
 
 

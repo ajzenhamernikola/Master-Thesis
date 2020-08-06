@@ -10,7 +10,7 @@ from sklearn import multioutput
 from preprocessing.os.arguments import cmd_args
 from preprocessing.cnf.generate_data import generate_edgelist_formats, generate_satzilla_features, \
     generate_dgcnn_formats, generate_dgcnn_pickled_data
-from models import knn, rf, dgcnn
+from models import knn, rf, dgcnn, gcn
 from models.common.data import load_data, scale_the_data
 from models.common.process_results import save_the_best_model, calculate_r2_and_rmse_metrics, plot_r2_and_rmse_scores, \
     calculate_r2_and_rmse_metrics_nn, plot_r2_and_rmse_scores_nn, plot_losses_nn
@@ -32,6 +32,10 @@ r2_scores_test = None
 rmse_scores_test = None
 
 # Globals for DGCNN model
+
+# Globals for GCN model
+train_device = torch.device("cuda:0" if cmd_args.mode == "gpu" else "cpu")
+test_device = torch.device("cpu")
 
 # Globals for all models
 best_model: ModelTypes
@@ -99,7 +103,7 @@ def data_preparation():
 
 
 def train_model():
-    global x_train, y_train, x_val, y_val, x_train_val, y_train_val, best_model
+    global x_train, y_train, x_val, y_val, x_train_val, y_train_val, best_model, train_device, test_device
 
     if cmd_args.model == "KNN":
         knn.train(x_train, y_train, x_val, y_val, solver_names, cmd_args.model_dir)
@@ -107,6 +111,8 @@ def train_model():
     elif cmd_args.model == "RF":
         rf.train(x_train, y_train, x_val, y_val, solver_names, cmd_args.model_dir)
         best_model = rf.retrain_the_best_model(x_train_val, y_train_val, cmd_args.model_dir)
+    elif cmd_args.model == "GCN":
+        gcn.train(cmd_args.model_output_dir, cmd_args.model, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.train(best_model, cmd_args.num_epochs, cmd_args.batch_size, cmd_args.look_behind, cmd_args.print_auc)
         dgcnn.retrain(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
@@ -116,12 +122,14 @@ def train_model():
 
 
 def evaluate_model():
-    global x_test, y_test, best_model, r2_scores_test, rmse_scores_test
+    global x_test, y_test, best_model, r2_scores_test, rmse_scores_test, train_device, test_device
 
     if cmd_args.model == "KNN" or cmd_args.model == "RF":
         r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics(best_model, x_test, y_test)
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "r2_scores.txt"), r2_scores_test)
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "rmse_scores.txt"), rmse_scores_test)
+    elif cmd_args.model == "GCN":
+        gcn.test(cmd_args.model_output_dir, cmd_args.model, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.test(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
         r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, cmd_args.model_output_dir,
