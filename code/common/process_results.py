@@ -40,7 +40,7 @@ def calculate_r2_and_rmse_metrics(best_model, x_test, y_test, y_pred=None):
         r2_scores_test[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
         rmse_scores_test[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
 
-    return r2_scores_test, rmse_scores_test
+    return r2_scores_test, rmse_scores_test, r2_scores_test, rmse_scores_test
 
 
 def calculate_r2_and_rmse_metrics_nn(best_model, model_output_dir, model):

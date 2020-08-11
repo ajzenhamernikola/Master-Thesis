@@ -7,16 +7,14 @@ import numpy as np
 import torch
 from sklearn import multioutput
 
-from preprocessing.os.arguments import cmd_args
-from preprocessing.cnf.generate_data import generate_edgelist_formats, generate_satzilla_features, \
-    generate_dgcnn_formats, generate_dgcnn_pickled_data
-from models import knn, rf, dgcnn, gcn
-from models.common.data import load_data, scale_the_data
-from models.common.process_results import save_the_best_model, calculate_r2_and_rmse_metrics, plot_r2_and_rmse_scores, \
+from code.preprocessing.os.arguments import cmd_args
+from code.preprocessing.cnf.generate_data import generate_edgelist_formats, generate_satzilla_features, \
+    generate_dgcnn_formats, generate_dgcnn_pickled_data, generate_cnf_datasets
+from code import knn, rf, gcn, gat, dgcnn
+from code.common.data import load_data, scale_the_data
+from code.common.process_results import save_the_best_model, calculate_r2_and_rmse_metrics, plot_r2_and_rmse_scores, \
     calculate_r2_and_rmse_metrics_nn, plot_r2_and_rmse_scores_nn, plot_losses_nn
 
-
-ModelTypes = Union[multioutput.MultiOutputRegressor, dgcnn.DGCNNPredictor]
 
 # Globals for KNN and RF models
 x_train = None
@@ -33,16 +31,21 @@ rmse_scores_test = None
 
 # Globals for DGCNN model
 
-# Globals for GCN model
+# Globals for GCN and GAT models
 train_device = torch.device("cuda:0" if cmd_args.mode == "gpu" else "cpu")
 test_device = torch.device("cpu")
+trainset = None
+valset = None
+trainvalset = None
+testset = None
 
 # Globals for all models
+ModelTypes = Union[multioutput.MultiOutputRegressor, gcn.GCN, gat.GAT, dgcnn.DGCNNPredictor]
 best_model: ModelTypes
 
 
 def data_preparation():
-    global x_train, y_train, x_val, y_val, x_train_val, y_train_val, x_test, y_test, solver_names, best_model
+    global x_train, y_train, x_val, y_val, x_train_val, y_train_val, x_test, y_test, solver_names, best_model, trainset, valset, trainvalset, testset
 
     print('Generating edgelist formats...')
     generate_edgelist_formats(os.path.join(cmd_args.cnf_dir, "splits.csv"), cmd_args.cnf_dir)
@@ -54,6 +57,13 @@ def data_preparation():
         x_train, y_train, x_val, y_val, x_train_val, y_train_val, x_test, y_test = load_data(cmd_args.cnf_dir)
         x_train, x_val, x_train_val, x_test = scale_the_data(x_train, x_val, x_train_val, x_test)
         solver_names = y_train.columns
+    elif cmd_args.model == "GCN" or cmd_args.model == "GAT":
+        print('Generating CNF dataset with Node2Vec features...')
+        training_data, testset = \
+            generate_cnf_datasets(cmd_args.cnf_dir,
+                                  os.path.join(cmd_args.cnf_dir, "splits.csv"),
+                                  os.path.join(cmd_args.cnf_dir, "all_data_y.csv"))
+        trainset, valset, trainvalset = training_data
     elif cmd_args.model == "DGCNN":
         print('Generating DGCNN formats...')
         generate_dgcnn_formats(os.path.join(cmd_args.cnf_dir, "splits.csv"),
@@ -112,7 +122,9 @@ def train_model():
         rf.train(x_train, y_train, x_val, y_val, solver_names, cmd_args.model_dir)
         best_model = rf.retrain_the_best_model(x_train_val, y_train_val, cmd_args.model_dir)
     elif cmd_args.model == "GCN":
-        gcn.train(cmd_args.model_output_dir, cmd_args.model, train_device, test_device)
+        gcn.train(cmd_args.model_output_dir, cmd_args.model, trainset, valset, trainvalset, train_device, test_device)
+    elif cmd_args.model == "GAT":
+        gat.train(cmd_args.model_output_dir, cmd_args.model, trainset, valset, trainvalset, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.train(best_model, cmd_args.num_epochs, cmd_args.batch_size, cmd_args.look_behind, cmd_args.print_auc)
         dgcnn.retrain(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
@@ -129,7 +141,9 @@ def evaluate_model():
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "r2_scores.txt"), r2_scores_test)
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "rmse_scores.txt"), rmse_scores_test)
     elif cmd_args.model == "GCN":
-        gcn.test(cmd_args.model_output_dir, cmd_args.model, train_device, test_device)
+        gcn.test(cmd_args.model_output_dir, cmd_args.model, testset, train_device, test_device)
+    elif cmd_args.model == "GAT":
+        gat.test(cmd_args.model_output_dir, cmd_args.model, testset, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.test(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
         r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, cmd_args.model_output_dir,

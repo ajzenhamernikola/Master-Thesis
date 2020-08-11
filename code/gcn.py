@@ -1,7 +1,6 @@
 import os
 from timeit import default_timer as timer
 from time import localtime
-import gc
 
 import dgl
 import numpy as np
@@ -14,45 +13,14 @@ from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from .common.CNFDatasetNode2Vec import CNFDatasetNode2Vec
+from .common.nn import collate, train_one_epoch, validate_one_epoch, time_for_early_stopping, \
+    calculate_r2_and_rmse_metrics
 
 
-DatasetClass = CNFDatasetNode2Vec
-csv_file_x = os.path.join('.', 'INSTANCES', 'splits.csv')
-csv_file_y = os.path.join('.', 'INSTANCES', 'all_data_y.csv')
-root_dir = os.path.join('.', 'INSTANCES',)
-
-
-def collate(dev):
-    def collate_fn(samples):
-        """
-            Forms a mini-batch from a given list of graphs and label pairs
-            :param samples: list of tuple pairs (graph, label)
-            :return:
-            """
-        graphs, labels = map(list, zip(*samples))
-        batched_graph = dgl.batch(graphs)
-        batched_labels = torch.tensor(labels, device=dev, dtype=torch.float32)
-        return batched_graph, batched_labels
-
-    return collate_fn
-
-
-class RMSELoss(nn.Module):
-    def __init__(self, eps=1e-6):
-        super().__init__()
-        self.mse = nn.MSELoss()
-        self.eps = eps
-
-    def forward(self, yhat, y):
-        loss = torch.sqrt(self.mse(yhat, y) + self.eps)
-        return loss
-
-
-class Regressor(nn.Module):
+class GCN(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_layers, activation, activation_params, dropout_p,
                  pooling="avg"):
-        super(Regressor, self).__init__()
+        super(GCN, self).__init__()
 
         # Checks
         num_layers = len(hidden_layers)
@@ -113,144 +81,36 @@ class Regressor(nn.Module):
         return linear
 
 
-def train_one_epoch(data_loader_train, num_of_batches, loss_func, model, optimizer, train_device):
-    model.train()
-    train_loss = 0
-    iter_idx = 0
-    pbar = tqdm(total=num_of_batches, unit='batch')
-
-    for iter_idx, (bg, label) in enumerate(data_loader_train):
-        # Get the data
-        inputs, labels = bg.to(train_device), label.to(train_device)
-        
-        # Zero the parameter gradients
-        optimizer.zero_grad()
-        
-        # Forward + backward + optimize
-        outputs = model(inputs)
-        loss = loss_func(outputs, labels)        
-        loss.backward()
-        optimizer.step()
-        
-        # Report loss
-        curr_loss = loss.detach().item()
-        train_loss += curr_loss
-        pbar.update(n=1)
-        pbar.set_description(f'Train loss: {curr_loss:.5f}')
-        
-        del inputs
-        del labels
-        gc.collect()
-
-    pbar.close()
-
-    return np.round(train_loss / (iter_idx + 1), 3)
-
-
-def validate_one_epoch(model_root, epoch, predictor, loss_func, data_loader_val, num_of_batches, train_device,
-                       test_device):
-    predictor.to(test_device)
-    predictor.eval()
-    val_loss = 0
-    iter_num = 0
-    y_pred = np.empty((0, 31))
-    y_true = np.empty((0, 31))
-    pbar = tqdm(total=num_of_batches, unit='batch')
-
-    for iter_num, (bg, label) in enumerate(data_loader_val):
-        # Get the data
-        prediction = predictor(bg.to(test_device))
-        
-        # Calculate loss
-        loss = loss_func(prediction, label.to(test_device))
-        curr_loss = loss.detach().item()
-        val_loss += curr_loss
-        
-        # Save prediction for calculating R^2 and RMSE scores
-        pred_y = predictor(bg.to(test_device))
-        pred_y = np.array(pred_y.to(test_device).detach().numpy())
-        y_pred = np.vstack((y_pred, pred_y))
-        y_true = np.vstack((y_true, label.to(test_device)))
-
-        pbar.update(n=1)
-        pbar.set_description(f'Validation loss: {curr_loss:.5f}')
-
-    pbar.close()
-
-    outputs_filename = os.path.join(model_root, f"Validation_{epoch}_outputs.txt")
-    np.savetxt(outputs_filename, y_pred, "%.6f")
-    ytrue_filename = os.path.join(model_root, f"Validation_y_true.txt")
-    if not os.path.exists(ytrue_filename):
-        np.savetxt(ytrue_filename, y_true, "%.6f")
-
-    r2_score_val_avg, rmse_score_val_avg, _, _ = calculate_r2_and_rmse_scores(y_pred, y_true)
-    predictor.to(train_device)
-
-    return np.round([val_loss / (iter_num + 1), r2_score_val_avg, rmse_score_val_avg], 3)
-
-
-def calculate_r2_and_rmse_scores(y_pred, y_true):
-    r2_scores_val = np.empty((31,))
-    rmse_scores_val = np.empty((31,))
-
-    for i in range(31):
-        r2_scores_val[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
-        rmse_scores_val[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
-
-    r2_score_val_avg = np.average(r2_scores_val)
-    rmse_score_val_avg = np.average(rmse_scores_val)
-
-    return r2_score_val_avg, rmse_score_val_avg, r2_scores_val, rmse_scores_val
-
-
-def time_for_early_stopping(val_losses, no_progress_max):
-    if len(val_losses) <= no_progress_max:
-        return False
-
-    last_epoch_loss = val_losses[-1]
-    best_epoch_loss = np.min(val_losses)
-
-    neg_slope = best_epoch_loss < last_epoch_loss
-    no_significant_progress = best_epoch_loss - last_epoch_loss < 0.05 * np.average(val_losses[-no_progress_max:])
-
-    return neg_slope or no_significant_progress
-
-
 # Train the model
-def train(model_output_dir, model, train_device, test_device):
+def train(model_output_dir, model, trainset, valset, trainvalset, train_device, test_device):
     # Load train data
-    batch_size = 50
-    trainset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Train")
+    batch_size = 1
     data_loader_train = DataLoader(trainset, batch_size=batch_size, shuffle=True, collate_fn=collate(train_device))
     train_num_of_batches = int(np.ceil(trainset.__len__() / batch_size))
 
     # Load val data
     val_batch_size = 1
-    valset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Validation")
     data_loader_val = DataLoader(valset, batch_size=val_batch_size, shuffle=False, collate_fn=collate(train_device))
     val_num_of_batches = int(np.ceil(valset.__len__() / val_batch_size))
 
     # Load train+val data
-    retrain_batch_size = 50
-    trainvalset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Train+Validation")
+    retrain_batch_size = batch_size
     data_loader_trainval = DataLoader(trainvalset, batch_size=retrain_batch_size, shuffle=True,
                                       collate_fn=collate(train_device))
-    retrain_num_of_batches = int(np.ceil(valset.__len__() / retrain_batch_size))
-
-    testset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Test")
+    retrain_num_of_batches = int(np.ceil(trainvalset.__len__() / retrain_batch_size))
 
     print("\n")
 
     # Model params
     input_dim = trainset.hidden_features_dim
     output_dim = 31
-    hidden_layers = [64, 64, 64]
+    hidden_layers = [31, 31]
     activation = "leaky"
     activation_params = {"negative_slope": 0.1}
-    dropout_p = 0.0
+    dropout_p = 0.1
     pooling = "avg"
     # Optimizer params
-    lr = 1e-3
+    lr = 0.001
     w_decay = 0
     loss = "mse"
     # Num of epochs
@@ -265,8 +125,6 @@ def train(model_output_dir, model, train_device, test_device):
         loss_func = nn.MSELoss()
     elif loss == "smooth-l1":
         loss_func = nn.SmoothL1Loss()
-    elif loss == "rmse":
-        loss_func = RMSELoss()
     else:
         raise ValueError(f"Loss function is not one of ['l1', 'mse', 'smooth-l1']. You passed: {loss}")
 
@@ -302,35 +160,38 @@ def train(model_output_dir, model, train_device, test_device):
     overwrite = True
     retrain = False
     model_path = os.path.join(model_root, "best_GCN_model")
-    if os.path.exists(model_path):
-        print("\nModel already exist. Would you like to overwrite it [o], continue training [t], just retrain [r] " + 
+    model_exists = os.path.exists(model_path)
+    if model_exists:
+        print("\nModel already exist. Would you like to overwrite it [o], continue training [t], just retrain [r] " +
               "or use existing [e]?")
         response = input().lower()
         if response == "e":
             return model_path
-        if response == "t":
+        elif response == "t":
             overwrite = False
-        if response == "r":
+        elif response == "r":
             overwrite = False
             retrain = True
         elif response != "o":
             raise ValueError(f"You responded with \"{response}\", while the options are one of {{o, t, e, r}}")
+    else:
+        predictor = GCN(input_dim,
+                        output_dim,
+                        hidden_layers,
+                        activation,
+                        activation_params,
+                        dropout_p,
+                        pooling)
 
     # Create model
     if overwrite:
-        predictor = Regressor(input_dim,
-                          output_dim,
-                          hidden_layers,
-                          activation,
-                          activation_params,
-                          dropout_p,
-                          pooling)
         train_losses = []
         val_losses = []
         r2_scores = []
         rmse_scores = []
         train_times = []
         val_times = []
+        retrain_times = []
         best_epoch = -1
         best_val_loss = None
         current_epoch = 0
@@ -343,14 +204,23 @@ def train(model_output_dir, model, train_device, test_device):
         rmse_scores = data[4]
         train_times = data[5]
         val_times = data[6]
-        losses = np.array(np.array(train_losses) + np.array(val_losses)) / 2
-        best_epoch = np.argmin(losses) # np.argmin(val_losses)
+        retrain_times = data[7]
+        best_epoch = np.argmin(val_losses)
         best_val_loss = val_losses[best_epoch]
         current_epoch = len(train_losses)
         if not retrain:
-            print("How much to train before checking for early stopping?")
+            print(f"How much to train from {current_epoch} before checking for early stopping?")
             no_progress_max = current_epoch + int(input())
-        
+
+    if not model_exists or overwrite or (retrain and len(retrain_times) == 0):
+        predictor = GCN(input_dim,
+                        output_dim,
+                        hidden_layers,
+                        activation,
+                        activation_params,
+                        dropout_p,
+                        pooling)
+                        
     predictor.to(train_device)
     optimizer = optim.Adam(predictor.parameters(), lr=lr, weight_decay=w_decay)
 
@@ -445,9 +315,18 @@ def train(model_output_dir, model, train_device, test_device):
         print(80 * "=")
 
         print("\nRetraining model on train+val dataset...")
-        retrain_times = []
 
-        for current_epoch in range(1, best_epoch + 1):
+        current_epoch = len(retrain_times) + 1
+        while True:
+            if current_epoch == best_epoch + 1:
+                print("Do you want to retrain more? [y/n]")
+                more_retraining = input() == "y"
+                if not more_retraining:
+                    break
+                
+                print(f"Enter the number of epochs to train from {best_epoch+1}:")
+                best_epoch += int(input())
+            
             t = localtime()
             print(
                 f"\tStarted epoch {current_epoch} at: {t.tm_hour}:{t.tm_min}:{t.tm_sec} {t.tm_mday}.{t.tm_mon}." +
@@ -459,17 +338,18 @@ def train(model_output_dir, model, train_device, test_device):
             retrain_times.append(time_elapsed)
             print(f"\tFinished epoch {current_epoch} of {best_epoch}")
     
-        # Serialize model for later usage
-        torch.save([predictor, train_losses, val_losses, r2_scores, rmse_scores, train_times, val_times, retrain_times],
-                   model_path)
+            # Serialize model for later usage
+            torch.save([predictor, train_losses, val_losses, r2_scores, rmse_scores, train_times, val_times, retrain_times],
+                       model_path)
+                       
+            current_epoch += 1
         
     return model_path
 
 
 # Test the model
-def test(model_output, model, predict_device, test_device):
+def test(model_output, model, testset, predict_device, test_device):
     test_batch_size = 1
-    testset = DatasetClass(csv_file_x, csv_file_y, root_dir, "Test")
     data_loader_test = DataLoader(testset, batch_size=test_batch_size, shuffle=False, collate_fn=collate(predict_device))
     test_num_of_batches = int(np.ceil(testset.__len__() / test_batch_size))
 
@@ -507,7 +387,7 @@ def test(model_output, model, predict_device, test_device):
                 y_true = np.vstack((y_true, true_y.to(test_device)))
                 
                 pbar.update(n=1)
-                pbar.set_description(f'Testing the model...')
+                pbar.set_description(f'Testing loss: {metrics.mean_squared_error(y_true, y_pred)}')
 
             pbar.close()
             # Save the predicted data
@@ -517,7 +397,7 @@ def test(model_output, model, predict_device, test_device):
     # Evaluate
     print("\nEvaluating...")
     r2_score_test_avg, rmse_score_test_avg, r2_scores_test, rmse_scores_test = \
-        calculate_r2_and_rmse_scores(y_pred, y_true)
+        calculate_r2_and_rmse_metrics(None, None, y_true, y_pred)
     print(f'\nAverage R2 score: {r2_score_test_avg:.4f}')
     print(f'Average RMSE score: {rmse_score_test_avg:.4f}\n')
 
@@ -559,35 +439,24 @@ def test(model_output, model, predict_device, test_device):
     plt.close()
     
     # Plot epochs
-    train_losses = data[1]
-    val_losses = data[2]
-    r2_scores = data[3]
-    rmse_scores = data[4]
+    train_losses = np.clip(data[1], 0, 5)
+    val_losses = np.clip(data[2], 0, 5)
     
     best_val_loss = np.argmin(val_losses)
     highest_val_loss = np.maximum(np.max(val_losses), np.max(train_losses))
 
-    fig, (top_ax, bot_ax) = plt.subplots(2)
     plt.title("Training progress")
-    fig.set_size_inches(w=len(train_losses) * 0.75, h=15)
+    plt.figure(figsize=(6, 5))
+    plt.xlabel("Epoch #")
+    plt.ylabel("Loss value")
+    xticks = range(len(train_losses))
+    plt.plot(xticks, train_losses, color="blue", linestyle="solid", label="train loss")
+    plt.plot(xticks, val_losses, color="red", linestyle="solid", label="val loss")
+    plt.plot([best_val_loss, best_val_loss], [0, highest_val_loss], color="green", linestyle="solid", label="best epoch")
+    plt.ylim(0, 5)
+    plt.legend()
 
-    top_ax.set_ylabel("Loss value")
-    top_ax.plot(range(len(train_losses)), train_losses, color="blue", linestyle="solid", label="train loss")
-    top_ax.plot(range(len(val_losses)), val_losses, color="red", linestyle="solid", label="val loss")
-    top_ax.plot([best_val_loss, best_val_loss], [0, highest_val_loss], color="green", linestyle="solid",
-                label="best epoch")
-
-    bot_ax.set_ylabel("Score value")
-    bot_ax.plot(range(len(r2_scores)), r2_scores, color="magenta", linestyle="solid", label="val R^2 score")
-    bot_ax.plot(range(len(rmse_scores)), rmse_scores, color="orange", linestyle="solid", label="val RMSE score")
-    bot_ax.legend()
-
-    for ax in fig.get_axes():
-        ax.set_xticks(range(len(train_losses)))
-        ax.set_xticklabels(range(1, len(train_losses) + 1))
-        ax.set_xlabel("Epoch #")
-        ax.legend()
-
+    plt.tight_layout()
     plt.savefig(os.path.join(model_output, model, "GCN_losses.png"))
     plt.close()
 

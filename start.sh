@@ -4,7 +4,7 @@
 DATA="CNF"
 model_output_dir="./out/models"
 cnf_dir="./INSTANCES"
-model=GCN #"DGCNN"
+model=GCN
 fold=1  # which fold as testing data
 
 # general settings
@@ -25,7 +25,7 @@ learning_rate=0.0001
 conv1d_activation="LeakyReLU(0.1)"
 
 CODE=134
-while [[ $CODE == 134 || $CODE == 170 ]]; do
+while [[ $CODE == 134 || $CODE == 137 ]]; do
     CUDA_VISIBLE_DEVICES=${GPU} python -m main \
       -seed 1 \
       -data $DATA \

@@ -9,12 +9,12 @@ import numpy as np
 import graphvite
 from tqdm import tqdm
 import networkx as nx
-from sklearn.preprocessing import MinMaxScaler
 
 from ..parsers.libparsers import parserslib
 from ..os.process import start_process
 from ..cnf.process_cnf_attributes import sort_by_split, is_unsolvable
 from ..algorithms.math import log10_transform_data
+from ..cnf.CNFDatasetNode2Vec import CNFDatasetNode2Vec
 
 
 IntOrFloat = Union[int, float]
@@ -295,3 +295,19 @@ def generate_dgcnn_pickled_data(model_output_dir: str, cnf_dir: str, instance_id
     print(f'K used in SortPooling is: {sortpooling_k}')
 
     return num_class, feat_dim, edge_feat_dim, attr_dim, sortpooling_k
+
+
+def generate_cnf_datasets_for_training(root_dir, csv_file_x, csv_file_y):
+    trainset = CNFDatasetNode2Vec(csv_file_x, csv_file_y, root_dir, "Train")
+    valset = CNFDatasetNode2Vec(csv_file_x, csv_file_y, root_dir, "Validation")
+    trainvalset = CNFDatasetNode2Vec(csv_file_x, csv_file_y, root_dir, "Train+Validation")
+    return trainset, valset, trainvalset
+
+
+def generate_cnf_datasets_for_testing(root_dir, csv_file_x, csv_file_y):
+    return CNFDatasetNode2Vec(csv_file_x, csv_file_y, root_dir, "Test")
+
+
+def generate_cnf_datasets(root_dir, csv_file_x, csv_file_y):
+    return generate_cnf_datasets_for_training(root_dir, csv_file_x, csv_file_y), \
+           generate_cnf_datasets_for_testing(root_dir, csv_file_x, csv_file_y)

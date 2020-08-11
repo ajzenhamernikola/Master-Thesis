@@ -1,18 +1,17 @@
 import os
-import random
-import math
 import pickle
 
 import numpy as np
 import pandas as pd
 from scipy import sparse
-import dgl
 from dgl import DGLGraph
 from dgl.data import save_graphs, load_graphs
 from graphvite import graph as vite_graph
 from graphvite import solver as vite_solver
 from torch.utils.data import Dataset
 from tqdm import tqdm
+
+from ..algorithms.math import log10_transform_data
 
 
 class Edgelist:
@@ -82,12 +81,6 @@ class SparseMatrix:
             self.data[v1, v2] = 1
 
 
-def log10_transform_data(data):
-    minimum_log10_value = 0.001
-    data[data < minimum_log10_value] = minimum_log10_value
-    return np.log10(data)
-
-
 def filter_dataset_by_splits(df: pd.DataFrame, splits: list):
     filtered = []
 
@@ -99,7 +92,7 @@ def filter_dataset_by_splits(df: pd.DataFrame, splits: list):
 
 
 class CNFDatasetNode2Vec(Dataset):
-    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, splits: str):
+    def __init__(self, csv_file_x: str, csv_file_y: str, root_dir: str, splits: str, classification=False):
         super(CNFDatasetNode2Vec).__init__()
         # Checks
         available_splits = ['Train', 'Validation', 'Test']
@@ -132,7 +125,7 @@ class CNFDatasetNode2Vec(Dataset):
         # Load the data
         indices = list(self.csv_data_x.index)
 
-        # percent = 0.1
+        # percent = 0.05
         # indices = indices[:int(percent*len(indices))]
 
         # Pickle the graphs if they don't exist
@@ -171,17 +164,6 @@ class CNFDatasetNode2Vec(Dataset):
             if self.check_if_pickled_features(i):
                 # print(f"\tAlready pickled!")
                 self.indices.append(i)
-
-                # graph = self.load_pickled_graph(i)
-                # features = self.load_pickled_features(i)
-                # try:
-                    # graph.ndata['features'] = features
-                # except:
-                    # graph_filename = self.extract_pickle_filename_and_folder(i)[0]
-                    # os.remove(graph_filename)
-                    # print(f"Removed: {graph_filename}")
-                    # exit(170)
-
                 continue
 
             # Finally, try to pickle feature data and save the index
@@ -203,11 +185,16 @@ class CNFDatasetNode2Vec(Dataset):
                 os.remove(wrong_instances_filename)
 
         # Load ys
+        self.num_classes = 31
+        
         for i in self.indices:
             # Get the cnf file path
             ys = self.get_ys(i)
             ys = log10_transform_data(ys)
-            self.ys.append(ys)
+            if classification:
+                self.ys.append(np.argmin(ys))
+            else:
+                self.ys.append(ys)
 
         print(f"\nNumber of instances in this dataset is: {len(self.indices)}")
 
