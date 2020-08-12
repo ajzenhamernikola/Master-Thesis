@@ -1,18 +1,9 @@
-from __future__ import print_function
-
-import os
-import sys
 import numpy as np
 import torch
-import random
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from tqdm import tqdm
 
-from gnn_lib import GNNLIB
 
 def glorot_uniform(t):
     if len(t.size()) == 2:
@@ -49,8 +40,8 @@ def weights_init(m):
         if not '.' in name: # top-level parameters
             _param_init(p)
 
-class MySpMM(torch.autograd.Function):
 
+class MySpMM(torch.autograd.Function):
     @staticmethod
     def forward(ctx, sp_mat, dense_mat):
         ctx.save_for_backward(sp_mat, dense_mat)
@@ -67,6 +58,7 @@ class MySpMM(torch.autograd.Function):
             grad_matrix2 = Variable(torch.mm(sp_mat.data.t(), grad_output.data))
         
         return grad_matrix1, grad_matrix2
+
 
 def gnn_spmm(sp_mat, dense_mat):
     return MySpMM.apply(sp_mat, dense_mat)

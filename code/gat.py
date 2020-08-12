@@ -77,8 +77,7 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
     loss = "mse"
     # Num of epochs
     epochs = 200
-    print("Enter the number of epochs required for training before checking for early stopping")
-    no_progress_max = int(input())
+    no_progress_max = 10
 
     # Checks
     if loss == "l1":
@@ -153,6 +152,8 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
         best_epoch = -1
         best_val_loss = None
         current_epoch = 0
+        print("Enter the number of epochs required for training before checking for early stopping")
+        no_progress_max = int(input())
     else:
         data = torch.load(model_path)
         predictor = data[0]
@@ -361,7 +362,7 @@ def test(model_output, model, testset, predict_device, test_device):
     print("\nEvaluating...")
     r2_score_test_avg, rmse_score_test_avg, r2_scores_test, rmse_scores_test = \
         calculate_r2_and_rmse_metrics(None, None, y_true, y_pred)
-    print(f'\nAverage R2 score: {r2_score_test_avg:.4f}')
+    print(f'\nAverage R2 score: {r2_score_test_avg:.4}')
     print(f'Average RMSE score: {rmse_score_test_avg:.4f}\n')
 
     # Prediction graphs per solver

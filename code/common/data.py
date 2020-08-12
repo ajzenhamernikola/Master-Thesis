@@ -11,10 +11,10 @@ def load_data(data_dir: str):
 
     splits = pd.read_csv(os.path.join(data_dir, "splits.csv"))
 
-    prepare_features_data(splits)
+    prepare_features_data(data_dir, splits)
     x = pd.read_csv(os.path.join(data_dir, "all_data_x.csv"))
 
-    prepare_output_data(splits)
+    prepare_output_data(data_dir, splits)
     y = pd.read_csv(os.path.join(data_dir, "all_data_y.csv"))
 
     x_train, y_train = filter_data_by_split(x, y, splits, "Train")

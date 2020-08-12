@@ -7,7 +7,7 @@ import torch.optim as optim
 
 from .dgcnn_embedding import DGCNN
 from .mlp_dropout import MLPClassifier, MLPRegression
-from ..features import prepare_feature_labels
+from .features import prepare_feature_labels
 
 
 IntOfFloat = Union[int, float]

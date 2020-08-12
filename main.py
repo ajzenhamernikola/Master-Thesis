@@ -52,7 +52,7 @@ def data_preparation():
 
     if cmd_args.model == "KNN" or cmd_args.model == "RF":
         print('Generating SATzilla2012 features...')
-        generate_satzilla_features(os.path.join(cmd_args.cnf_dir, "splits.csv"))
+        generate_satzilla_features(os.path.join(cmd_args.cnf_dir, "splits.csv"), "./", cmd_args.cnf_dir)
 
         x_train, y_train, x_val, y_val, x_train_val, y_train_val, x_test, y_test = load_data(cmd_args.cnf_dir)
         x_train, x_val, x_train_val, x_test = scale_the_data(x_train, x_val, x_train_val, x_test)
@@ -137,7 +137,7 @@ def evaluate_model():
     global x_test, y_test, best_model, r2_scores_test, rmse_scores_test, train_device, test_device
 
     if cmd_args.model == "KNN" or cmd_args.model == "RF":
-        r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics(best_model, x_test, y_test)
+        _, _, r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics(best_model, x_test, y_test)
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "r2_scores.txt"), r2_scores_test)
         np.savetxt(os.path.join(cmd_args.model_output_dir, cmd_args.model, "rmse_scores.txt"), rmse_scores_test)
     elif cmd_args.model == "GCN":
@@ -146,8 +146,8 @@ def evaluate_model():
         gat.test(cmd_args.model_output_dir, cmd_args.model, testset, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.test(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
-        r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, cmd_args.model_output_dir,
-                                                                            cmd_args.model)
+        _, _, r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, cmd_args.model_output_dir,
+                                                                                  cmd_args.model)
 
 
 def process_results():

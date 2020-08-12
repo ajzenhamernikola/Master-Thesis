@@ -62,16 +62,15 @@ class GNNGraph(object):
             self.edge_features = np.concatenate(self.edge_features, 0)
 
 
-def generate_satzilla_features(csv_filename):
+def generate_satzilla_features(csv_filename, root_dirname, cnf_dir):
     data = pd.read_csv(csv_filename)
     idx = 0
     for filename in data['instance_id']:
         idx += 1
-        features_filename = filename + '.features'
+        features_filename = os.path.join(cnf_dir, filename + '.features')
         if os.path.exists(features_filename):
             continue
         print('Creating SATzilla2012 features for file #{0}: {1}...'.format(idx, filename))
-        root_dirname = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
         start_process(f'{root_dirname}/third-party/SATzilla2012_features/features', [filename, features_filename])
 
 

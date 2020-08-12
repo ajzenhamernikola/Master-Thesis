@@ -4,7 +4,7 @@
 DATA="CNF"
 model_output_dir="./out/models"
 cnf_dir="./INSTANCES"
-model=GCN
+model="RF"
 fold=1  # which fold as testing data
 
 # general settings

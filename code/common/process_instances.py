@@ -2,7 +2,7 @@ import os
 
 import pandas as pd
 
-from .math import log10_transform_data
+from ..preprocessing.algorithms.math import log10_transform_data
 
 
 def filter_by_available_instances(available_instances: list):
@@ -15,9 +15,8 @@ def filter_by_available_instances(available_instances: list):
     return closure
 
 
-def prepare_features_data(splits: pd.DataFrame):
-    global data_dir
-    all_data_x_file = os.path.join(data_dir, "chosen_data", "all_data_x.csv")
+def prepare_features_data(data_dir: str, splits: pd.DataFrame):
+    all_data_x_file = os.path.join(data_dir, "all_data_x.csv")
     if os.path.exists(all_data_x_file):
         return
 
@@ -44,9 +43,8 @@ def prepare_features_data(splits: pd.DataFrame):
     x.to_csv(all_data_x_file, index=False)
 
 
-def prepare_output_data(splits: pd.DataFrame):
-    global data_dir
-    all_data_y_file = os.path.join(data_dir, "chosen_data", "all_data_y.csv")
+def prepare_output_data(data_dir: str, splits: pd.DataFrame):
+    all_data_y_file = os.path.join(data_dir, "all_data_y.csv")
     if os.path.exists(all_data_y_file):
         return
 

@@ -35,13 +35,15 @@ class GCN(nn.Module):
             self.activation = nn.ELU(**activation_params)
         elif activation == "selu":
             self.activation = nn.SELU(**activation_params)
+        elif activation == "tanh":
+            self.activation = nn.Tanh()
         else:
             raise NotImplementedError(f"Unknown activation method: {pooling}")
 
         self.layers = nn.ModuleList()
         # Input layer
         self.layers.append(GraphConv(input_dim, hidden_layers[0]))
-        self.bn_layer = nn.BatchNorm1d(hidden_layers[0])
+        self.bn_layer = nn.BatchNorm1d(input_dim)
         # Hidden layers
         for i in range(num_layers - 1):
             self.layers.append(GraphConv(hidden_layers[i], hidden_layers[i + 1]))
@@ -69,8 +71,7 @@ class GCN(nn.Module):
             else:
                 h = self.bn_layer(h)
             h = layer(g, h)
-            if i != len(self.layers) - 1:
-                h = self.activation(h)
+            h = self.activation(h)
 
         # Perform pooling over all nodes in each graph in every layer
         pooled_h = self.pool(g, h)
@@ -84,7 +85,7 @@ class GCN(nn.Module):
 # Train the model
 def train(model_output_dir, model, trainset, valset, trainvalset, train_device, test_device):
     # Load train data
-    batch_size = 1
+    batch_size = 40
     data_loader_train = DataLoader(trainset, batch_size=batch_size, shuffle=True, collate_fn=collate(train_device))
     train_num_of_batches = int(np.ceil(trainset.__len__() / batch_size))
 
@@ -104,10 +105,10 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
     # Model params
     input_dim = trainset.hidden_features_dim
     output_dim = 31
-    hidden_layers = [31, 31]
+    hidden_layers = [64, 64, 64]
     activation = "leaky"
-    activation_params = {"negative_slope": 0.1}
-    dropout_p = 0.1
+    activation_params = {"negative_slope": 0.2}
+    dropout_p = 0.0
     pooling = "avg"
     # Optimizer params
     lr = 0.001
@@ -115,8 +116,7 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
     loss = "mse"
     # Num of epochs
     epochs = 200
-    print("Enter the number of epochs required for training before checking for early stopping")
-    no_progress_max = int(input())
+    no_progress_max = 50
 
     # Checks
     if loss == "l1":
@@ -195,6 +195,8 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
         best_epoch = -1
         best_val_loss = None
         current_epoch = 0
+        print("Enter the number of epochs required for training before checking for early stopping")
+        no_progress_max = int(input())
     else:
         data = torch.load(model_path)
         predictor = data[0]
@@ -223,6 +225,8 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
                         
     predictor.to(train_device)
     optimizer = optim.Adam(predictor.parameters(), lr=lr, weight_decay=w_decay)
+
+    print(predictor)
 
     if not retrain:
         print("\nModel created! Training...\n")
@@ -277,7 +281,7 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
             print(f'\tTrain loss: {train_loss}; training time: {train_times[-1]:.2f}s')
             print(f'\tValidation loss: {val_loss}; validation time: {val_times[-1]:.2f}s')
             print(f'\tValidation R^2 score: {r2_score_val_avg}')
-            print(f'\tValidation RMSE score: {rmse_score_val_avg}')
+            print(f'\tValidation RMSE score: {rmse_score_val_avg}\n')
             
             # Serialize model for later usage
             torch.save([predictor, train_losses, val_losses, r2_scores, rmse_scores, train_times, val_times, []], model_path)
@@ -289,7 +293,7 @@ def train(model_output_dir, model, trainset, valset, trainvalset, train_device, 
                 if not continue_train:
                     print(
                         f'\nThe training is stopped in epoch {current_epoch} due to no progress in validation loss:')
-                    print(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}')
+                    print(f'\tBest validation loss {best_val_loss} achieved in epoch {best_epoch}\n')
                     break
 
                 print(f"How many epochs to train from epoch {no_progress_max} until next early stopping?")

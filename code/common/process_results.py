@@ -40,7 +40,7 @@ def calculate_r2_and_rmse_metrics(best_model, x_test, y_test, y_pred=None):
         r2_scores_test[i] = metrics.r2_score(y_true[:, i:i + 1], y_pred[:, i:i + 1])
         rmse_scores_test[i] = metrics.mean_squared_error(y_true[:, i:i + 1], y_pred[:, i:i + 1], squared=False)
 
-    return r2_scores_test, rmse_scores_test, r2_scores_test, rmse_scores_test
+    return np.average(r2_scores_test), np.average(rmse_scores_test), r2_scores_test, rmse_scores_test
 
 
 def calculate_r2_and_rmse_metrics_nn(best_model, model_output_dir, model):
@@ -58,7 +58,7 @@ def plot_r2_and_rmse_scores(r2_scores_test, rmse_scores_test, solver_names, mode
 
     print(f"Average R2 score: {r2_score_test_avg}, Average RMSE score: {rmse_score_test_avg}")
 
-    png_file = os.path.join(model_output_dir, model, f"{model}.png")
+    png_file = os.path.join(model_output_dir, f"{model}.png")
     plt.figure(figsize=(15, 6))
 
     plt.subplot(1, 2, 1)

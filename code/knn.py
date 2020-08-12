@@ -2,30 +2,32 @@ import os
 import pickle
 import numpy as np
 import pandas as pd
-from sklearn import neighbors
+from sklearn.neighbors import KNeighborsRegressor
 from sklearn import metrics
 from sklearn import multioutput
 
+from .preprocessing.algorithms.math import lorentzian_distance, angular_distance
 
-def search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weights, algorithm, model_dir):
+
+def search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weights, distances, model_dir):
     print("Searching for the best model")
     number_of_solvers = y_train.shape[1]
 
     # Validation scores
-    shape = (len(n_neighbors), len(weights), len(algorithm), number_of_solvers)
+    shape = (len(n_neighbors), len(weights), len(distances), number_of_solvers)
     r2_scores = np.empty(shape)
     rmse_scores = np.empty(shape)
 
     model_search_results = os.path.join(model_dir, f"KNN_model_search_results.csv")
     if os.path.exists(model_search_results):
         data = pd.read_csv(model_search_results)
-        i_mult = len(weights) * len(algorithm) * number_of_solvers
-        j_mult = len(algorithm) * number_of_solvers
+        i_mult = len(weights) * len(distances) * number_of_solvers
+        j_mult = len(distances) * number_of_solvers
         k_mult = number_of_solvers
 
         for i in range(len(n_neighbors)):
             for j in range(len(weights)):
-                for k in range(len(algorithm)):
+                for k in range(len(distances)):
                     for l in range(number_of_solvers):
                         idx = i * i_mult + k * k_mult + j * j_mult + l
                         r2_score = data.iloc[idx]["r2 score"]
@@ -43,13 +45,16 @@ def search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weigh
         param_n_neighbors = n_neighbors[i]
         for j in range(len(weights)):
             param_weights = weights[j]
-            for k in range(len(algorithm)):
-                param_algorithm = algorithm[k]
+            for k in range(len(distances)):
+                param_distance = distances[k]
                 for l in range(number_of_solvers):
                     count += 1
                     print(f"\tTraining model {count}/{max_count}")
-                    model = neighbors.KNeighborsRegressor(
-                        n_neighbors=param_n_neighbors, weights=param_weights, algorithm=param_algorithm, n_jobs=-1)
+                    model = KNeighborsRegressor(n_neighbors=param_n_neighbors,
+                                                weights=param_weights,
+                                                metric=param_distance["metric"],
+                                                algorithm='brute',
+                                                n_jobs=-1)
                     model.fit(x_train, y_train.iloc[:, l:l + 1])
                     y_true, y_pred = y_val.iloc[:, l:l + 1], model.predict(x_val)
                     r2_score = metrics.r2_score(y_true, y_pred)
@@ -60,43 +65,45 @@ def search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weigh
     return r2_scores, rmse_scores
 
 
-def save_training_data(r2_scores, rmse_scores, n_neighbors, weights, algorithm, solver_names, model_dir):
+def save_training_data(r2_scores, rmse_scores, n_neighbors, weights, distances, solver_names, model_dir):
     print("Saving the training results")
     number_of_solvers = len(solver_names)
 
     model_search_results = os.path.join(model_dir, f"KNN_model_search_results.csv")
     if not os.path.exists(model_search_results):
         with open(model_search_results, "w", encoding="utf-8") as csv:
-            csv.write("n_neighbors,weights,algorithm,solver name,r2 score,rmse score\n")
+            csv.write("n_neighbors,weights,distance,solver name,r2 score,rmse score\n")
             for i in range(len(n_neighbors)):
                 param_n_neighbors = n_neighbors[i]
                 for j in range(len(weights)):
                     param_weights = weights[j]
-                    for k in range(len(algorithm)):
-                        param_algorithm = algorithm[k]
+                    for k in range(len(distances)):
+                        param_distance = distances[k]
                         for l in range(number_of_solvers):
                             solver_name = solver_names[l]
-                            row = f"{param_n_neighbors},{param_weights},{param_algorithm},{solver_name},{r2_scores[i, j, k, l]},{rmse_scores[i, j, k, l]}\n"
+                            row = f"{param_n_neighbors},{param_weights},{param_distance['name']},{solver_name}," + \
+                                  f"{r2_scores[i, j, k, l]},{rmse_scores[i, j, k, l]}\n"
                             csv.write(row)
 
     model_search_group_results = os.path.join(model_dir, f"KNN_model_search_group_results.csv")
     if not os.path.exists(model_search_group_results):
         with open(model_search_group_results, "w", encoding="utf-8") as csv:
-            csv.write(
-                "n_neighbors,weights,algorithm,avg r2 score,min r2 score,max r2 score,avg rmse score,min rmse score,max rmse score\n")
+            csv.write("n_neighbors,weights,distance,avg r2 score,min r2 score,max r2 score,avg rmse score," +
+                      "min rmse score,max rmse score\n")
             for i in range(len(n_neighbors)):
                 param_n_neighbors = n_neighbors[i]
                 for j in range(len(weights)):
                     param_weights = weights[j]
-                    for k in range(len(algorithm)):
-                        param_algorithm = algorithm[k]
+                    for k in range(len(distances)):
+                        param_distance = distances[k]
                         avg_r2_score = np.average(r2_scores[i, j, k])
                         min_r2_score = np.min(r2_scores[i, j, k])
                         max_r2_score = np.max(r2_scores[i, j, k])
                         avg_rmse_score = np.average(rmse_scores[i, j, k])
                         min_rmse_score = np.min(rmse_scores[i, j, k])
                         max_rmse_score = np.max(rmse_scores[i, j, k])
-                        row = f"{param_n_neighbors},{param_weights},{param_algorithm},{avg_r2_score},{min_r2_score},{max_r2_score},{avg_rmse_score},{min_rmse_score},{max_rmse_score}\n"
+                        row = f"{param_n_neighbors},{param_weights},{param_distance['name']},{avg_r2_score}," + \
+                              f"{min_r2_score},{max_r2_score},{avg_rmse_score},{min_rmse_score},{max_rmse_score}\n"
                         csv.write(row)
 
 
@@ -117,10 +124,18 @@ def retrain_the_best_model(x_train_val, y_train_val, model_dir):
     best_params = {
         "n_neighbors": int(best_data["n_neighbors"]),
         "weights": best_data["weights"],
-        "algorithm": best_data["algorithm"]
     }
+    if best_data["distance"] == "euclidean" or best_data["distance"] == "manhattan":
+        best_params["metric"] = best_data["distance"]
+    elif best_data["distance"] == "lorentzian":
+        best_params["metric"] = lorentzian_distance
+    elif best_data["distance"] == "angular":
+        best_params["metric"] = angular_distance
+    else:
+        raise ValueError(f"Unknown metric: {best_data['distance']}")
+
     print(f"\tBest params: {best_params}")
-    best_model = multioutput.MultiOutputRegressor(neighbors.KNeighborsRegressor(**best_params, n_jobs=-1))
+    best_model = multioutput.MultiOutputRegressor(KNeighborsRegressor(**best_params, algorithm='brute', n_jobs=-1))
     best_model.fit(x_train_val, y_train_val)
 
     return best_model
@@ -129,7 +144,10 @@ def retrain_the_best_model(x_train_val, y_train_val, model_dir):
 def train(x_train, y_train, x_val, y_val, solver_names, model_dir):
     n_neighbors = np.arange(1, 11)
     weights = ["uniform", "distance"]
-    algorithm = ["ball_tree", "kd_tree", "brute"]
+    distances = [{"metric": lorentzian_distance, "name": "lorentzian"},
+                 {"metric": angular_distance, "name": "angular"},
+                 {"metric": "euclidean", "name": "euclidean"},
+                 {"metric": "manhattan", "name": "manhattan"}]
 
-    r2_scores, rmse_scores = search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weights, algorithm, model_dir)
-    save_training_data(r2_scores, rmse_scores, n_neighbors, weights, algorithm, solver_names, model_dir)
+    r2_scores, rmse_scores = search_for_the_best_model(x_train, y_train, x_val, y_val, n_neighbors, weights, distances, model_dir)
+    save_training_data(r2_scores, rmse_scores, n_neighbors, weights, distances, solver_names, model_dir)

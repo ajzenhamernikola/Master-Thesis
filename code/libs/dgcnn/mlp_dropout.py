@@ -1,20 +1,11 @@
 from __future__ import print_function
 
-import os
-import sys
-import numpy as np
-import torch
-import random
 from torch.autograd import Variable
-from torch.nn.parameter import Parameter
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-from tqdm import tqdm
-import pdb
 
-sys.path.append('%s/lib' % os.path.dirname(os.path.realpath(__file__)))
 from .lib.pytorch_util import weights_init
+
 
 class MLPRegression(nn.Module):
     def __init__(self, input_size, hidden_size, output_size=1, with_dropout=False):
@@ -43,6 +34,7 @@ class MLPRegression(nn.Module):
         else:
             return pred
 
+
 class MLPClassifier(nn.Module):
     def __init__(self, input_size, hidden_size, num_class, with_dropout=False):
         super(MLPClassifier, self).__init__()
@@ -53,7 +45,7 @@ class MLPClassifier(nn.Module):
 
         weights_init(self)
 
-    def forward(self, x, y = None):
+    def forward(self, x, y=None):
         h1 = self.h1_weights(x)
         h1 = F.relu(h1)
         if self.with_dropout:
