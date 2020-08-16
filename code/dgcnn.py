@@ -169,6 +169,10 @@ def test(dgcnn: DGCNNPredictor, batch_size: int, extract_features=False, print_a
     dgcnn.load()
 
     print_box("TESTING")
+    
+    predictions_filename = os.path.join(dgcnn.model_output_dir, dgcnn.model, "Test_ypred.txt")
+    if os.path.exists(predictions_filename):
+        return
 
     test_idxes = list(range(dgcnn.splits["Train"] + dgcnn.splits["Validation"],
                             dgcnn.splits["Train"] + dgcnn.splits["Validation"] + dgcnn.splits["Test"]))

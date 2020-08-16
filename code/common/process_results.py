@@ -44,8 +44,8 @@ def calculate_r2_and_rmse_metrics(best_model, x_test, y_test, y_pred=None):
 
 
 def calculate_r2_and_rmse_metrics_nn(best_model, model_output_dir, model):
-    y_pred = np.loadtxt(os.path.join(model_output_dir, model, "Test_ypred.txt"))
-    y_true = np.loadtxt(os.path.join(model_output_dir, model, "Test_ytrue.txt"))
+    y_pred = np.loadtxt(os.path.join(model_output_dir, "Test_ypred.txt"))
+    y_true = np.loadtxt(os.path.join(model_output_dir, "Test_ytrue.txt"))
 
     return calculate_r2_and_rmse_metrics(best_model, None, y_true, y_pred)
 
@@ -65,25 +65,27 @@ def plot_r2_and_rmse_scores(r2_scores_test, rmse_scores_test, solver_names, mode
     xticks = range(1, len(r2_scores_test) + 1)
     yticks = np.round(r2_scores_test, 1)
     ymin = np.maximum(np.minimum(np.min(yticks), 0), -10)
-    yticks = list(np.linspace(ymin, 1, int(10 * (1 - ymin))))
+    yticks = list(np.linspace(ymin, 1, int(10 * (1 - ymin)) + 1))
     ylabels = list(np.round(yticks, 1))
+    ylim = (np.min(yticks), np.max(yticks))
     plt.title("R2 scores per solver")
     plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
     plt.yticks(ticks=ylabels, labels=ylabels)
-    plt.ylim((np.min(yticks), np.max(yticks)))
-    plt.bar(xticks, r2_scores_test, color="#578FF7")
+    plt.ylim(ylim)
+    plt.bar(xticks, np.clip(r2_scores_test, ylim[0], ylim[1]), color="#578FF7")
     plt.plot([xticks[0], xticks[-1]], [r2_score_test_avg, r2_score_test_avg], "r-")
-
+    
     plt.subplot(1, 2, 2)
     xticks = range(1, len(rmse_scores_test) + 1)
     rmse_score_test_max = np.ceil(np.max(rmse_scores_test))
-    yticks = np.linspace(0, rmse_score_test_max, 10)
-    ylabels = np.round(np.linspace(0, rmse_score_test_max, 10), 1)
+    yticks = np.linspace(0, rmse_score_test_max, int(10*rmse_score_test_max) + 1)
+    ylabels = np.round(np.linspace(0, rmse_score_test_max, int(10*rmse_score_test_max) + 1), 1)
+    ylim = (np.min(yticks), np.max(yticks))
     plt.title("RMSE scores per solver")
     plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
     plt.yticks(ticks=yticks, labels=ylabels)
-    plt.ylim((np.min(yticks), np.max(yticks)))
-    plt.bar(xticks, rmse_scores_test, color="#FA6A68")
+    plt.ylim(ylim)
+    plt.bar(xticks, np.clip(rmse_scores_test, ylim[0], ylim[1]), color="#FA6A68")
     plt.plot([xticks[0], xticks[-1]], [rmse_score_test_avg, rmse_score_test_avg], "b-")
 
     plt.tight_layout()

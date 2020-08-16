@@ -13,9 +13,6 @@ from tqdm import tqdm
 from .classes import Predictor
 
 
-# ys = pd.read_csv(os.path.join(os.path.dirname(__file__), "..", "..", "..", "INSTANCES", "all_data_y.csv"))
-
-
 def load_next_batch(cnf_dir: str, instance_ids: list, selected_idx: list, splits: dict, dataset_type: str):
     batch_graph = []
     labels = []

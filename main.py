@@ -146,9 +146,7 @@ def evaluate_model():
         gat.test(cmd_args.model_output_dir, cmd_args.model, testset, train_device, test_device)
     elif cmd_args.model == "DGCNN":
         dgcnn.test(best_model, cmd_args.batch_size, cmd_args.extract_features, cmd_args.print_auc)
-        _, _, r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, cmd_args.model_output_dir,
-                                                                                  cmd_args.model)
-
+        
 
 def process_results():
     global r2_scores_test, rmse_scores_test, solver_names, best_model
@@ -156,8 +154,11 @@ def process_results():
     if cmd_args.model == "KNN" or cmd_args.model == "RF":
         plot_r2_and_rmse_scores(r2_scores_test, rmse_scores_test, solver_names, cmd_args.model_dir, cmd_args.model)
     elif cmd_args.model == "DGCNN":
+        dgcnn_model_dir = os.path.join(cmd_args.model_output_dir, cmd_args.model)
+        _, _, r2_scores_test, rmse_scores_test = calculate_r2_and_rmse_metrics_nn(best_model, dgcnn_model_dir,
+                                                                                  cmd_args.model)
+        plot_r2_and_rmse_scores_nn(r2_scores_test, rmse_scores_test, dgcnn_model_dir, cmd_args.model)
         plot_losses_nn(cmd_args.model_output_dir, cmd_args.model)
-        plot_r2_and_rmse_scores_nn(r2_scores_test, rmse_scores_test, cmd_args.model_output_dir, cmd_args.model)
 
 
 def main():

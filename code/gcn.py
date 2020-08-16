@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from .common.nn import collate, train_one_epoch, validate_one_epoch, time_for_early_stopping, \
-    calculate_r2_and_rmse_metrics
+from .common.nn import collate, train_one_epoch, validate_one_epoch, time_for_early_stopping
+from .common.process_results import calculate_r2_and_rmse_metrics_nn, plot_r2_and_rmse_scores_nn
 
 
 class GCN(nn.Module):
@@ -358,7 +358,8 @@ def test(model_output, model, testset, predict_device, test_device):
     test_num_of_batches = int(np.ceil(testset.__len__() / test_batch_size))
 
     # Load the model
-    data = torch.load(os.path.join(model_output, model, "best_GCN_model"))
+    model_output_dir = os.path.join(model_output, model)
+    data = torch.load(os.path.join(model_output_dir, f"best_{model}_model"))
     predictor = data[0]
     predictor.to(predict_device)
 
@@ -400,47 +401,10 @@ def test(model_output, model, testset, predict_device, test_device):
 
     # Evaluate
     print("\nEvaluating...")
-    r2_score_test_avg, rmse_score_test_avg, r2_scores_test, rmse_scores_test = \
-        calculate_r2_and_rmse_metrics(None, None, y_true, y_pred)
-    print(f'\nAverage R2 score: {r2_score_test_avg:.4f}')
-    print(f'Average RMSE score: {rmse_score_test_avg:.4f}\n')
+    _, _, r2_scores_test, rmse_scores_test = \
+        calculate_r2_and_rmse_metrics_nn(predictor, model_output_dir, model)
 
-    # Prediction graphs per solver
-    png_file = os.path.join(model_output, model, "GCN.png")
-
-    solver_names = ["ebglucose", "ebminisat", "glucose2", "glueminisat", "lingeling", "lrglshr", "minisatpsm",
-                    "mphaseSAT64", "precosat", "qutersat", "rcl", "restartsat", "cryptominisat2011", "spear-sw",
-                    "spear-hw", "eagleup", "sparrow", "marchrw", "mphaseSATm", "satime11", "tnm", "mxc09", "gnoveltyp2",
-                    "sattime", "sattimep", "clasp2", "clasp1", "picosat", "mphaseSAT", "sapperlot", "sol"]
-    plt.figure(figsize=(15, 6))
-
-    plt.subplot(1, 2, 1)
-    xticks = range(1, len(r2_scores_test) + 1)
-    ymin = int(np.floor(np.min(r2_scores_test)))
-    yticks = np.linspace(ymin, 1, 10*(1-ymin))
-    ylabels = np.round(yticks, 1)
-    plt.title("R2 scores per solver")
-    plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
-    plt.yticks(ticks=yticks, labels=ylabels)
-    plt.ylim((np.min(yticks), np.max(yticks)))
-    plt.bar(xticks, r2_scores_test, color="#578FF7")
-    plt.plot([xticks[0], xticks[-1]], [r2_score_test_avg, r2_score_test_avg], "r-")
-
-    plt.subplot(1, 2, 2)
-    xticks = range(1, len(rmse_scores_test) + 1)
-    rmse_score_test_max = np.ceil(np.max(rmse_scores_test))
-    yticks = np.linspace(0, rmse_score_test_max, 10)
-    ylabels = np.round(np.linspace(0, rmse_score_test_max, 10), 1)
-    plt.title("RMSE scores per solver")
-    plt.xticks(ticks=xticks, labels=list(solver_names), rotation=90)
-    plt.yticks(ticks=yticks, labels=ylabels)
-    plt.ylim((np.min(yticks), np.max(yticks)))
-    plt.bar(xticks, rmse_scores_test, color="#FA6A68")
-    plt.plot([xticks[0], xticks[-1]], [rmse_score_test_avg, rmse_score_test_avg], "b-")
-
-    plt.tight_layout()
-    plt.savefig(png_file, dpi=300)
-    plt.close()
+    plot_r2_and_rmse_scores_nn(r2_scores_test, rmse_scores_test, model_output_dir, model)
     
     # Plot epochs
     train_losses = np.clip(data[1], 0, 5)
